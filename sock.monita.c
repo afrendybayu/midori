@@ -11,7 +11,7 @@
 #include <arpa/inet.h>	//inet_addr
 #include "sock.monita.h"
 
-#define PAKAI_DEBUG			0
+#define PAKAI_DEBUG			1
 
 int printd(const char *format, ...)	{
 #if (PAKAI_DEBUG==1)
@@ -29,8 +29,10 @@ int printd(const char *format, ...)	{
 int parsing_konfig(char *s)	{
 	int i=0;
 	//printf("p: %d\r\n", strlen(s));
-	char a[20], b[20];
-	const char *pch, *pchpagar, *pchawal;
+	char a[20], b[128];
+	const char *pch;
+	pch = strchr(s, '#');
+	if (pch!=NULL)	return 2;
 	if (strlen(s)>1)	{
 		sscanf(s,"%s = %s", a, b);
 		printd("  ----> a:>>%s<<, b:>>%s<<\r\n", a, b);
@@ -47,6 +49,7 @@ int parsing_konfig(char *s)	{
 			}
 		}
 		if (!strcmp(a,"sumber"))	{
+			printd("isinya: %s = %s\r\n", a, b);
 			i=iI+1;
 			if (i>sumber.jmlSumber)	{
 				printf(" --- ERROR Sumber LEBIH !!!\r\n ---\r\n");
@@ -57,6 +60,9 @@ int parsing_konfig(char *s)	{
 			strcpy(ipsumber[iI].ip, b); printd("%s\r\n", b); 
 			iI++;
 			printd("i: %d, iI: %d\r\n", i, iI);
+		}
+		if (!strcmp(a,"idsumber"))	{
+			
 		}
 	}
 	return 1;
@@ -95,25 +101,30 @@ void init_var()		{
 }
 
 int buka_soket()	{
-	int i;
+	int i, n;
 	int socket_desc;
 	struct sockaddr_in server_m[sumber.jmlSumber];
 	
 	printd("===> %s masuk...\r\n", __FUNCTION__);
-	socket_desc = socket(AF_INET , SOCK_STREAM , 0);
-	if (socket_desc == -1)	{
-		printd("Could not create socket");
-	}
+	
 	for (i=0; i<sumber.jmlSumber; i++)	{
-		server_m.sin_addr.s_addr = inet_addr(ipsumber[i].ip);
-		server_m.sin_family = AF_INET;
-		server_m.sin_port = htons( sumber.socket );
-		
-		printd("Connect to remote server\r\n");
-		if (ipsumber[i].socket = connect(socket_desc , (struct sockaddr *)&server_m , sizeof(server_m)) < 0)		{
-			ipsumber[i].socket = -1;
+		ipsumber[i].socket_desc = socket(AF_INET , SOCK_STREAM , 0);
+		printd("socket desc: %d\r\n", ipsumber[i].socket_desc);
+		if (socket_desc == -1)	{
+			printd("Could not create socket");
+		} else {
+			server_m[i].sin_addr.s_addr = inet_addr(ipsumber[i].ip);
+			server_m[i].sin_family = AF_INET;
+			server_m[i].sin_port = htons( sumber.socket );
+			
+			printd("Connect to remote server\r\n");
+			ipsumber[i].socket = connect(ipsumber[i].socket_desc, (struct sockaddr *)&server_m[i] , sizeof(server_m[i]));
+			
+			if (ipsumber[i].socket >= 0)		{
+				printd("Connected %d\r\n", ipsumber[i].socket);
+			} else
+				ipsumber[i].socket = -1;
 		}
-		printd("Connected %s\r\n", );
 	}
 }
 
@@ -140,13 +151,13 @@ int main(int argc , char *argv[])	{
 	cek_konfig();
 	
 	printf(" Cek konfig selesai %d/%d\r\n", iI, sumber.jmlSumber);
-	
+	buka_soket();
 	iI = 0;
 	while(1)	{
 		sleep(1);
 		ambil_data();
 	}
-	//free(ipsumber);		// --> free ipsumber kok ERROR !!!
+	free(ipsumber);		// --> free ipsumber kok ERROR !!!
 	
 	
 	

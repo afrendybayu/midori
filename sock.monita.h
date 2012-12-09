@@ -21,6 +21,7 @@ struct t_modem	{
 struct t_ipsumber		{
 	int no;
 	char ip[16];
+	int socket_desc;
 	int socket;
 	int jeda;				// delay ketika socket mati
 };
