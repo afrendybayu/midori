@@ -14,6 +14,7 @@
 #include "sock.monita.h"
 
 #define PAKAI_DEBUG			1
+#define JEDA	5
 
 int printd(const char *format, ...)	{
 #if (PAKAI_DEBUG==1)
@@ -117,6 +118,33 @@ void init_var()		{
 	aa = 02;
 }
 
+int buka_soket_satuan(int i)	{
+	struct sockaddr_in server_m;
+	printd("~~~~~ %s masuk: soket: %d/%d\r\n", __FUNCTION__, ipsumber[i].socket, ipsumber[i].socket_desc);
+	switch (ipsumber[i].socket)	{
+		case -1: // buka lokal socket
+			printd(" +++++ buat socket dulu !!\r\n");
+			ipsumber[i].socket_desc = socket(AF_INET , SOCK_STREAM , 0);
+			printd("socket desc: %d\r\n", ipsumber[i].socket_desc);
+			ipsumber[i].socket = 1;
+		case 2:	 // konek socket ke tujuan
+			printd(" +++++ coba buka soket %d/%d\r\n", i, ipsumber[i].socket_desc);
+			server_m.sin_addr.s_addr = inet_addr(ipsumber[i].ip);
+			server_m.sin_family = AF_INET;
+			server_m.sin_port = htons( sumber.socket );
+			ipsumber[i].socket = connect(ipsumber[i].socket_desc, (struct sockaddr *)&server_m , sizeof(server_m));
+			if (ipsumber[i].socket >= 0)		{
+				printd("Connected %d\r\n", ipsumber[i].socket);
+				ipsumber[i].stat_konek = 1;
+				ipsumber[i].socket = 2;
+			} else {
+				printd("Tidak nyambung !!!\r\n");
+				ipsumber[i].stat_konek = 0;
+				ipsumber[i].jeda = JEDA;
+			}
+	}
+}
+
 int buka_soket()	{
 	int i, n;
 	int socket_desc;
@@ -127,6 +155,7 @@ int buka_soket()	{
 	for (i=0; i<sumber.jmlSumber; i++)	{
 		ipsumber[i].socket_desc = socket(AF_INET , SOCK_STREAM , 0);
 		printd("socket desc: %d\r\n", ipsumber[i].socket_desc);
+		ipsumber[i].socket = 1;
 		if (socket_desc == -1)	{
 			printd("Could not create socket");
 		} else {
@@ -139,8 +168,13 @@ int buka_soket()	{
 			
 			if (ipsumber[i].socket >= 0)		{
 				printd("Connected %d\r\n", ipsumber[i].socket);
-			} else
-				ipsumber[i].socket = -1;
+				ipsumber[i].stat_konek = 1;
+				ipsumber[i].socket = 2;
+			} else {
+				//ipsumber[i].socket = -1;
+				ipsumber[i].stat_konek = 0;
+				ipsumber[i].jeda = JEDA;
+			}
 		}
 	}
 }
@@ -149,32 +183,41 @@ int ambil_data_satuan(int no)	{
 	struct t_xdata st_data;
 	char message[12] , s_reply[300];
 	
+	printf(" %s masuk\r\n", __FUNCTION__);
 	int jmlNSock, i;
 	sprintf(message, "sampurasun%d", 1);
 	
-	if( send(ipsumber[no].socket_desc, message , strlen(message) , 0) < 0)    {
+	jmlNSock = send(ipsumber[no].socket_desc, message, strlen(message), 0);
+	if( jmlNSock < 0 )    {
         printf("Send failed");
-        return 1;
+        sleep(2);
+        //return 0;
     }
-    printd("Data Send [%d]--> ", no);
+    printf(" %s masuk2: %d\r\n", __FUNCTION__, jmlNSock);
+    printf("Data Send [%d]--> ", no);
+    //sleep(2);
+    if (jmlNSock>0)	{
     
-    jmlNSock = recv(ipsumber[no].socket_desc, s_reply, 300 , 0);
-    if( jmlNSock < 0)    {
-        printf("recv failed");
-        return 0;
-    }
-    printd("Reply received: %d/%d/%d\n", jmlNSock, sizeof(st_data), sizeof(data_f));
-    printd(s_reply);
-	
-	memcpy ( &st_data, &s_reply, jmlNSock );
-	memcpy( (char *) &data_f[no], st_data.buf, PER_SUMBER*sizeof(float) );
-    
-    printd("==> %s >> urut:%d >> flag:%d >> alamat:%d\r\n", st_data.mon, st_data.nomer, st_data.flag, st_data.alamat);
-	for(i=0; i<PER_SUMBER; i++)		{
-		//printd("%.2f ", data_f[i]);
+		jmlNSock = recv(ipsumber[no].socket_desc, s_reply, 300 , 0);
+		if( jmlNSock < 0)    {
+			printf("recv failed");
+			sleep(2);
+			return 0;
+		}
+		printd("Reply received: %d/%d/%d\n", jmlNSock, sizeof(st_data), sizeof(data_f));
+		printd(s_reply);
+		
+		memcpy ( &st_data, &s_reply, jmlNSock );
+		memcpy( (char *) &data_f[no], st_data.buf, PER_SUMBER*sizeof(float) );
+		
+		printd("==> %s >> urut:%d >> flag:%d >> alamat:%d\r\n", st_data.mon, st_data.nomer, st_data.flag, st_data.alamat);
+		for(i=0; i<PER_SUMBER; i++)		{
+			//printd("%.2f ", data_f[i]);
+		}
+		//printd("-++-");
+		return 1;
 	}
-	//printd("-++-");
-	return 1;
+	return 0;
 }
 
 void ambil_data()	{
@@ -182,9 +225,18 @@ void ambil_data()	{
 	printd("  ---%3d/%d : Ambil DATA:\r\n", ++iI, sumber.jmlSumber);
 	for (i=0; i<sumber.jmlSumber; i++)	{
 		printd(" %d/%d --> %s ||", ipsumber[i].no, sumber.jmlSumber, ipsumber[i].ip);
-		flag = ambil_data_satuan(i);
-		//printf("i:%d. flag: %d\r\n", i, flag);
-		//while (flag==1);
+		if (ipsumber[i].stat_konek==1)	{
+			flag = ambil_data_satuan(i);
+		}
+		if (ipsumber[i].jeda>0)	{
+			printf(" %%%%%%%% Turunkan JEDA !\r\n");
+			ipsumber[i].jeda--;
+		} else {
+			if (ipsumber[i].stat_konek==0)	{
+				printf(" ---- COBA BUKA SOKET LAGI !!!\r\n");
+				buka_soket_satuan(i);
+			}
+		}
 	}
 	
 }

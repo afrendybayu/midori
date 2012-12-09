@@ -24,6 +24,7 @@ struct t_ipsumber		{
 	int socket_desc;
 	int socket;
 	int jeda;				// delay ketika socket mati
+	int stat_konek;
 };
 
 struct t_tuj	{
