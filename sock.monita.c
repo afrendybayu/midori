@@ -9,6 +9,7 @@
 #include <sys/socket.h>
 #include <string.h>
 #include <arpa/inet.h>	//inet_addr
+#include <signal.h>
 #include "sock.monita.h"
 
 #define PAKAI_DEBUG			1
@@ -26,10 +27,18 @@ int printd(const char *format, ...)	{
 #endif
 }
 
+void siginthandler(int param)	{
+	printf("\r\n ---- masuk Interupsi !!!!\r\n");
+	free(data_f);
+	free(ipsumber);
+	printf(">>>>>>>>>>> Free Memory\r\n");
+	exit(1);
+}
+
 int parsing_konfig(char *s)	{
 	int i=0;
 	//printf("p: %d\r\n", strlen(s));
-	char a[20], b[128];
+	char a[50], b[128];
 	const char *pch;
 	pch = strchr(s, '#');
 	if (pch!=NULL)	return 2;
@@ -42,7 +51,8 @@ int parsing_konfig(char *s)	{
 		
 		if (!strcmp(a,"jmlsumber"))	{	
 			printd("%s\r\n", b);  sumber.jmlSumber = atoi(b); 
-			ipsumber = (char *) malloc(sumber.jmlSumber * sizeof(ipsumber));
+			ipsumber = (char *) malloc(sumber.jmlSumber * sizeof(struct t_ipsumber));
+			data_f = (char *) malloc (sumber.jmlSumber * PER_SUMBER * sizeof(float));
 			if (ipsumber==NULL)	{
 				printf(" --- ERROR MALLOC sumber !!!\r\n ---\r\n");
 				return 0;
@@ -55,11 +65,11 @@ int parsing_konfig(char *s)	{
 				printf(" --- ERROR Sumber LEBIH !!!\r\n ---\r\n");
 				return 0;
 			}
-			printd("i: %d, iI: %d\r\n", i, iI);
+			//printd("i: %d, iI: %d\r\n", i, iI);
 			ipsumber[iI].no = i;
 			strcpy(ipsumber[iI].ip, b); printd("%s\r\n", b); 
 			iI++;
-			printd("i: %d, iI: %d\r\n", i, iI);
+			//printd("i: %d, iI: %d\r\n", i, iI);
 		}
 		if (!strcmp(a,"idsumber"))	{
 			
@@ -93,11 +103,16 @@ int akses_file_konfig()	{
 		}
 		fclose(pFile);
 	}
+	printf("tutup FILE\r\n");
+	//free(data_f);
+	//free(ipsumber);
+	//printf(">>>>>>>>>>> Free Memory\r\n");
 	return i;
 }
 
 void init_var()		{
 	iI = 0;
+	aa = 02;
 }
 
 int buka_soket()	{
@@ -128,12 +143,41 @@ int buka_soket()	{
 	}
 }
 
+
+int ambil_data_satuan(int no)	{
+	struct t_xdata st_data;
+	char message[12] , s_reply[300];
+	
+	int jmlNSock;
+	sprintf(message, "sampurasun%d", aa++);
+	
+	if( send(ipsumber[no].socket_desc, message , strlen(message) , 0) < 0)    {
+        puts("Send failed");
+        return 1;
+    }
+    printd("Data Send");
+    
+    //*
+    jmlNSock = recv(ipsumber[no].socket_desc, s_reply, 300 , 0);
+    if( jmlNSock < 0)    {
+        puts("recv failed");
+        return 0;
+    }
+    printd("Reply received: %d/%d/%d\n", jmlNSock, sizeof(st_data), sizeof(data_f));
+    //*/
+    printd(s_reply);
+	//memcpy ( &st_data, &s_reply, jmlNSock );
+	//memcpy( (char *) &data_f, st_data.buf, PER_SUMBER*sizeof(float) );
+}
+
 void ambil_data()	{
 	int i=0;
 	printf("  ---%3d/%d : Ambil DATA:", ++iI, sumber.jmlSumber);
 	for (i=0; i<sumber.jmlSumber; i++)	{
 		printf(" %d/%d --> %s ||", ipsumber[i].no, sumber.jmlSumber, ipsumber[i].ip);
+		ambil_data_satuan(i);
 	}
+	
 	printf("\r\n");
 }
 
@@ -144,10 +188,19 @@ int main(int argc , char *argv[])	{
 	struct t_xdata st_data;
 	int i, jmlNSock;
 
+	signal(SIGINT, siginthandler);
+	/*
+	float *ff;
+	ff = malloc (PER_SUMBER * 3 * sizeof(float));
+	sleep(1);
+	free(ff);
+	//*/
 	
 	i = akses_file_konfig();
 	printd(" Akses konfig selesai %d\r\n", i);
 	
+	
+	//return 0;
 	cek_konfig();
 	
 	printf(" Cek konfig selesai %d/%d\r\n", iI, sumber.jmlSumber);

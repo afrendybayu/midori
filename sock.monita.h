@@ -34,10 +34,11 @@ struct t_tuj	{
 struct t_modem com_mod;
 struct t_tuj sumber;
 struct t_ipsumber *ipsumber;
-float data_f[PER_SUMBER];
+float *data_f;
+//float data_f[PER_SUMBER];
 FILE * pFile;
 
-
+int aa;
 int iI;
 int printd(const char *format, ...);
 int akses_file_konfig(void);
