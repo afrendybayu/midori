@@ -6,6 +6,7 @@
 
 #include <stdio.h>
 #include <stdarg.h>
+#include <stdlib.h>
 #include <sys/socket.h>
 #include <string.h>
 #include <arpa/inet.h>	//inet_addr
@@ -32,7 +33,7 @@ void siginthandler(int param)	{
 	free(data_f);
 	free(ipsumber);
 	printf(">>>>>>>>>>> Free Memory\r\n");
-	sleep(2);
+	sleep(1);
 	exit(1);
 }
 
@@ -52,8 +53,8 @@ int parsing_konfig(char *s)	{
 		
 		if (!strcmp(a,"jmlsumber"))	{	
 			printd("%s\r\n", b);  sumber.jmlSumber = atoi(b); 
-			ipsumber = (char *) malloc(sumber.jmlSumber * sizeof(struct t_ipsumber));
-			data_f = (char *) malloc (sumber.jmlSumber * PER_SUMBER * sizeof(float));
+			ipsumber = malloc(sumber.jmlSumber * sizeof(struct t_ipsumber));
+			data_f = malloc (sumber.jmlSumber * PER_SUMBER * sizeof(float));
 			if (ipsumber==NULL)	{
 				printf(" --- ERROR MALLOC sumber !!!\r\n ---\r\n");
 				return 0;
@@ -144,42 +145,48 @@ int buka_soket()	{
 	}
 }
 
-
 int ambil_data_satuan(int no)	{
 	struct t_xdata st_data;
 	char message[12] , s_reply[300];
 	
-	int jmlNSock;
-	sprintf(message, "sampurasun%d", aa++);
+	int jmlNSock, i;
+	sprintf(message, "sampurasun%d", 1);
 	
 	if( send(ipsumber[no].socket_desc, message , strlen(message) , 0) < 0)    {
-        puts("Send failed");
+        printf("Send failed");
         return 1;
     }
-    printd("Data Send");
+    printd("Data Send [%d]--> ", no);
     
-    //*
     jmlNSock = recv(ipsumber[no].socket_desc, s_reply, 300 , 0);
     if( jmlNSock < 0)    {
-        puts("recv failed");
+        printf("recv failed");
         return 0;
     }
     printd("Reply received: %d/%d/%d\n", jmlNSock, sizeof(st_data), sizeof(data_f));
-    //*/
     printd(s_reply);
-	//memcpy ( &st_data, &s_reply, jmlNSock );
-	//memcpy( (char *) &data_f, st_data.buf, PER_SUMBER*sizeof(float) );
+	
+	memcpy ( &st_data, &s_reply, jmlNSock );
+	memcpy( (char *) &data_f[no], st_data.buf, PER_SUMBER*sizeof(float) );
+    
+    printd("==> %s >> urut:%d >> flag:%d >> alamat:%d\r\n", st_data.mon, st_data.nomer, st_data.flag, st_data.alamat);
+	for(i=0; i<PER_SUMBER; i++)		{
+		//printd("%.2f ", data_f[i]);
+	}
+	//printd("-++-");
+	return 1;
 }
 
 void ambil_data()	{
-	int i=0;
-	printf("  ---%3d/%d : Ambil DATA:", ++iI, sumber.jmlSumber);
+	int i=0, flag=0;
+	printd("  ---%3d/%d : Ambil DATA:\r\n", ++iI, sumber.jmlSumber);
 	for (i=0; i<sumber.jmlSumber; i++)	{
-		printf(" %d/%d --> %s ||", ipsumber[i].no, sumber.jmlSumber, ipsumber[i].ip);
-		ambil_data_satuan(i);
+		printd(" %d/%d --> %s ||", ipsumber[i].no, sumber.jmlSumber, ipsumber[i].ip);
+		flag = ambil_data_satuan(i);
+		//printf("i:%d. flag: %d\r\n", i, flag);
+		//while (flag==1);
 	}
 	
-	printf("\r\n");
 }
 
 int main(int argc , char *argv[])	{
@@ -190,59 +197,26 @@ int main(int argc , char *argv[])	{
 	int i, jmlNSock;
 
 	signal(SIGINT, siginthandler);
-	/*
-	float *ff;
-	ff = malloc (PER_SUMBER * 3 * sizeof(float));
-	sleep(1);
-	free(ff);
-	//*/
+	signal(SIGQUIT, siginthandler);
 	
 	i = akses_file_konfig();
 	printd(" Akses konfig selesai %d\r\n", i);
 	
-	
-	//return 0;
 	cek_konfig();
-	
 	printf(" Cek konfig selesai %d/%d\r\n", iI, sumber.jmlSumber);
+	
 	buka_soket();
 	iI = 0;
 	while(1)	{
 		sleep(1);
 		ambil_data();
 	}
-	free(ipsumber);		// --> free ipsumber kok ERROR !!!
-	
-	
+	printf("keluar LOOP !!!\r\n");
+	siginthandler(1);
+	printf("keluar MAIN !!!\r\n");
 	
 	return 0;
 
-	socket_desc = socket(AF_INET , SOCK_STREAM , 0);
-	printd("Buat socket_desc: %d\r\n", socket_desc);
-	if (socket_desc == -1)	{
-		printd("Could not create socket");
-	}
-
-	server.sin_addr.s_addr = inet_addr("192.168.1.250");
-	server.sin_family = AF_INET;
-	server.sin_port = htons( 5001 );
-
-	printd("Connect to remote server\r\n");
-	if (connect(socket_desc , (struct sockaddr *)&server , sizeof(server)) < 0)
-	{
-		puts("connect error");
-		return 1;
-	}
-	
-	printd("Connected");
-	
-	sprintf(message, "sampurasun%d", 1);
-	//message = "GET / HTTP/1.1\r\n\r\n";
-	if( send(socket_desc , message , strlen(message) , 0) < 0)    {
-        puts("Send failed");
-        return 1;
-    }
-    printd("Data Send\n");
 
 	//Receive a reply from the server
 	jmlNSock = recv(socket_desc, s_reply , 2000 , 0);
@@ -251,14 +225,7 @@ int main(int argc , char *argv[])	{
     }
     printd("Reply received: %d/%d/%d\n", jmlNSock, sizeof(st_data), sizeof(data_f));
     printd(s_reply);
-	memcpy ( &st_data, &s_reply, jmlNSock );
-	memcpy( (char *) &data_f, st_data.buf, PER_SUMBER*sizeof(float) );
-    
-    printd("==> %s >> urut:%d >> flag:%d >> alamat:%d\r\n", st_data.mon, st_data.nomer, st_data.flag, st_data.alamat);
-	for(i=0; i<PER_SUMBER; i++)		{
-		printd("%.2f ", data_f[i]);
-	}
-	printd("\r\n");
+	
 	
 	return 0;
 }
