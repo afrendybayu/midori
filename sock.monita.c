@@ -13,7 +13,7 @@
 #include <signal.h>
 #include "sock.monita.h"
 
-#define PAKAI_DEBUG			1
+#define PAKAI_DEBUG			0
 #define JEDA	5
 
 int printd(const char *format, ...)	{
@@ -30,17 +30,22 @@ int printd(const char *format, ...)	{
 }
 
 void siginthandler(int param)	{
-	printf("\r\n ---- masuk Interupsi !!!!\r\n");
+	printd("\r\n ---- masuk Interupsi !!!!\r\n");
 	free(data_f);
 	free(ipsumber);
-	printf(">>>>>>>>>>> Free Memory\r\n");
+	printd(">>>>>>>>>>> Free Memory\r\n");
 	sleep(1);
 	exit(1);
 }
 
+void sig_pipe(int signum)	{
+	printd("==========> %s:%d, iI: %d\r\n", __FUNCTION__, signum, iI);
+	buka_soket_satuan(iI);
+	signal(SIGPIPE, sig_pipe);
+}
+
 int parsing_konfig(char *s)	{
 	int i=0;
-	//printf("p: %d\r\n", strlen(s));
 	char a[50], b[128];
 	const char *pch;
 	pch = strchr(s, '#');
@@ -106,10 +111,7 @@ int akses_file_konfig()	{
 		}
 		fclose(pFile);
 	}
-	printf("tutup FILE\r\n");
-	//free(data_f);
-	//free(ipsumber);
-	//printf(">>>>>>>>>>> Free Memory\r\n");
+	printd("tutup FILE\r\n");
 	return i;
 }
 
@@ -183,10 +185,11 @@ int ambil_data_satuan(int no)	{
 	struct t_xdata st_data;
 	char message[12] , s_reply[300];
 	
+	iI = no;
 	printf(" %s masuk\r\n", __FUNCTION__);
 	int jmlNSock, i;
 	sprintf(message, "sampurasun%d", 1);
-	
+	printf(" kirim sampurasun ");
 	jmlNSock = send(ipsumber[no].socket_desc, message, strlen(message), 0);
 	if( jmlNSock < 0 )    {
         printf("Send failed");
@@ -217,6 +220,8 @@ int ambil_data_satuan(int no)	{
 		//printd("-++-");
 		return 1;
 	}
+	printf("keluar JALUR %s !!!\r\n", __FUNCTION__);
+	//sleep(3);
 	return 0;
 }
 
@@ -229,11 +234,11 @@ void ambil_data()	{
 			flag = ambil_data_satuan(i);
 		}
 		if (ipsumber[i].jeda>0)	{
-			printf(" %%%%%%%% Turunkan JEDA !\r\n");
+			printd(" %%%%%%%% Turunkan JEDA %d !\r\n", i);
 			ipsumber[i].jeda--;
 		} else {
 			if (ipsumber[i].stat_konek==0)	{
-				printf(" ---- COBA BUKA SOKET LAGI !!!\r\n");
+				printd(" ---- COBA BUKA SOKET LAGI %d !!!\r\n", i);
 				buka_soket_satuan(i);
 			}
 		}
@@ -250,6 +255,7 @@ int main(int argc , char *argv[])	{
 
 	signal(SIGINT, siginthandler);
 	signal(SIGQUIT, siginthandler);
+	signal(SIGPIPE, sig_pipe);
 	
 	i = akses_file_konfig();
 	printd(" Akses konfig selesai %d\r\n", i);
