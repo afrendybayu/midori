@@ -32,6 +32,7 @@ void siginthandler(int param)	{
 	free(data_f);
 	free(ipsumber);
 	printf(">>>>>>>>>>> Free Memory\r\n");
+	sleep(2);
 	exit(1);
 }
 
