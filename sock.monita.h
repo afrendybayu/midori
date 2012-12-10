@@ -34,12 +34,28 @@ struct t_tuj	{
 
 struct t_modem com_mod;
 struct t_tuj sumber;
+//volatile static 
 struct t_ipsumber *ipsumber;
 float *data_f;
+int *idData;
 //float data_f[PER_SUMBER];
 FILE * pFile;
 
-int aa;
+int aa, bb;
 int iI;
+
+void siginthandler(int param);
+void sig_pipe(int signum);
+
+void cek_konfig();
+void ambil_data();
+int buka_sendiri();
+
 int printd(const char *format, ...);
 int akses_file_konfig(void);
+int parsing_konfig(char *s);
+int buka_soket_satuan(int i);
+int buka_soket();
+int ambil_data_satuan(int no);
+int parsing_data_satuan(int no);
+

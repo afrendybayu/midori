@@ -11,10 +11,12 @@
 #include <string.h>
 #include <arpa/inet.h>	//inet_addr
 #include <signal.h>
+#include <unistd.h>
+#include <time.h>
 #include "sock.monita.h"
 
-#define PAKAI_DEBUG			0
-#define JEDA	5
+#define PAKAI_DEBUG			1
+#define JEDA	2
 
 int printd(const char *format, ...)	{
 #if (PAKAI_DEBUG==1)
@@ -30,10 +32,10 @@ int printd(const char *format, ...)	{
 }
 
 void siginthandler(int param)	{
-	printd("\r\n ---- masuk Interupsi !!!!\r\n");
+	printf("\r\n ---- masuk Interupsi !!!!\r\n");
 	free(data_f);
 	free(ipsumber);
-	printd(">>>>>>>>>>> Free Memory\r\n");
+	printf(">>>>>>>>>>> Free Memory\r\n");
 	sleep(1);
 	exit(1);
 }
@@ -59,10 +61,20 @@ int parsing_konfig(char *s)	{
 		
 		if (!strcmp(a,"jmlsumber"))	{	
 			printd("%s\r\n", b);  sumber.jmlSumber = atoi(b); 
+			printf("======= ALOKASI MEMORI SUMBER dan DATA ========\r\n");
 			ipsumber = malloc(sumber.jmlSumber * sizeof(struct t_ipsumber));
 			data_f = malloc (sumber.jmlSumber * PER_SUMBER * sizeof(float));
+			idData = malloc (sumber.jmlSumber * PER_SUMBER * sizeof(int));
 			if (ipsumber==NULL)	{
 				printf(" --- ERROR MALLOC sumber !!!\r\n ---\r\n");
+				return 0;
+			}
+			if (data_f==NULL)	{
+				printf(" --- ERROR MALLOC data_f !!!\r\n ---\r\n");
+				return 0;
+			}
+			if (idData==NULL)	{
+				printf(" --- ERROR MALLOC id_konfig !!!\r\n ---\r\n");
 				return 0;
 			}
 		}
@@ -73,21 +85,27 @@ int parsing_konfig(char *s)	{
 				printf(" --- ERROR Sumber LEBIH !!!\r\n ---\r\n");
 				return 0;
 			}
-			//printd("i: %d, iI: %d\r\n", i, iI);
 			ipsumber[iI].no = i;
 			strcpy(ipsumber[iI].ip, b); printd("%s\r\n", b); 
 			iI++;
 			//printd("i: %d, iI: %d\r\n", i, iI);
 		}
 		if (!strcmp(a,"idsumber"))	{
-			
+			//printd("iI: %d \r\n", iI);
+			i=0;
+			pch = strtok (b,",");
+			while (pch != NULL)	{
+				idData[(iI-1)*PER_SUMBER+i] = atoi(pch); 		//printd ("%s\n",pch);
+				pch = strtok (NULL, ",");
+				i++;
+			}
 		}
 	}
 	return 1;
 }
 
 void cek_konfig()	{
-	int i=0;
+	int i=0, j;
 	printf("serialport: %s\r\n", com_mod.comSer);
 	printf("baudrate  : %d\r\n", com_mod.baud);
 	printf("socket    : %d\r\n", sumber.socket);
@@ -95,10 +113,16 @@ void cek_konfig()	{
 	for(i=0; i<sumber.jmlSumber; i++)	{
 		printf("%3d. IP: %s\r\n", ipsumber[i].no, ipsumber[i].ip);
 	}
+	for(i=0; i<sumber.jmlSumber; i++)	{
+		for (j=0; j<PER_SUMBER; j++)	{
+			printf("id[%2d]: %4d --- ", i*PER_SUMBER+j, idData[i*PER_SUMBER+j]);
+			if (!((j+1)%5))	printf("\r\n");
+		}
+	}
 }
 
 int akses_file_konfig()	{
-	int i=0, j, max=100;
+	int i=0, max=100;
 	char line [100];
 	pFile = fopen (FILENYA,"r");
 	
@@ -118,6 +142,7 @@ int akses_file_konfig()	{
 void init_var()		{
 	iI = 0;
 	aa = 02;
+	bb = 1;
 }
 
 int buka_soket_satuan(int i)	{
@@ -136,20 +161,22 @@ int buka_soket_satuan(int i)	{
 			server_m.sin_port = htons( sumber.socket );
 			ipsumber[i].socket = connect(ipsumber[i].socket_desc, (struct sockaddr *)&server_m , sizeof(server_m));
 			if (ipsumber[i].socket >= 0)		{
-				printd("Connected %d\r\n", ipsumber[i].socket);
+				printd("Connected buka mandiri: %d\r\n", ipsumber[i].socket_desc);
 				ipsumber[i].stat_konek = 1;
 				ipsumber[i].socket = 2;
 			} else {
-				printd("Tidak nyambung !!!\r\n");
+				printd("Tidak nyambung !!! TUTUP SOKET %d !!!\r\n", ipsumber[i].socket_desc);
 				ipsumber[i].stat_konek = 0;
 				ipsumber[i].jeda = JEDA;
+				close(ipsumber[i].socket_desc);
 			}
 	}
+	return 1;
 }
 
 int buka_soket()	{
-	int i, n;
-	int socket_desc;
+	int i;
+	//int socket_desc;
 	struct sockaddr_in server_m[sumber.jmlSumber];
 	
 	printd("===> %s masuk...\r\n", __FUNCTION__);
@@ -158,7 +185,7 @@ int buka_soket()	{
 		ipsumber[i].socket_desc = socket(AF_INET , SOCK_STREAM , 0);
 		printd("socket desc: %d\r\n", ipsumber[i].socket_desc);
 		ipsumber[i].socket = 1;
-		if (socket_desc == -1)	{
+		if (ipsumber[i].socket_desc == -1)	{
 			printd("Could not create socket");
 		} else {
 			server_m[i].sin_addr.s_addr = inet_addr(ipsumber[i].ip);
@@ -179,62 +206,64 @@ int buka_soket()	{
 			}
 		}
 	}
+	return 1;
 }
 
 int ambil_data_satuan(int no)	{
 	struct t_xdata st_data;
-	char message[12] , s_reply[300];
-	
-	iI = no;
-	printf(" %s masuk\r\n", __FUNCTION__);
+	char message[20] , s_reply[300];
+
+	iI = no;		strcpy(s_reply, "");
+	//printd(" %s masuk\r\n", __FUNCTION__);
 	int jmlNSock, i;
+
 	sprintf(message, "sampurasun%d", 1);
-	printf(" kirim sampurasun ");
+	//printf("\r\n------------%s ... no: %d, sock desc[%d]: %d, pesan: %s\r\n", __FUNCTION__, no, i, ipsumber[i].socket_desc, message);
+
 	jmlNSock = send(ipsumber[no].socket_desc, message, strlen(message), 0);
-	if( jmlNSock < 0 )    {
+	if (jmlNSock < 0)    {
         printf("Send failed");
-        sleep(2);
-        //return 0;
+        return 1;
     }
-    printf(" %s masuk2: %d\r\n", __FUNCTION__, jmlNSock);
-    printf("Data Send [%d]--> ", no);
-    //sleep(2);
-    if (jmlNSock>0)	{
     
+    if (jmlNSock>0)	{
 		jmlNSock = recv(ipsumber[no].socket_desc, s_reply, 300 , 0);
-		if( jmlNSock < 0)    {
+		if( jmlNSock <= 0)    {
 			printf("recv failed");
-			sleep(2);
+			//sleep(2);
 			return 0;
 		}
 		printd("Reply received: %d/%d/%d\n", jmlNSock, sizeof(st_data), sizeof(data_f));
-		printd(s_reply);
+		//printd(s_reply);
 		
 		memcpy ( &st_data, &s_reply, jmlNSock );
 		memcpy( (char *) &data_f[no], st_data.buf, PER_SUMBER*sizeof(float) );
 		
-		printd("==> %s >> urut:%d >> flag:%d >> alamat:%d\r\n", st_data.mon, st_data.nomer, st_data.flag, st_data.alamat);
+		printd("==> no: %d === %s >> urut:%d >> flag:%d >> alamat:%d\r\n", no, st_data.mon, st_data.nomer, st_data.flag, st_data.alamat);
 		for(i=0; i<PER_SUMBER; i++)		{
-			//printd("%.2f ", data_f[i]);
+			printd("%.1f ", data_f[no*PER_SUMBER+i]);
 		}
-		//printd("-++-");
+		printf("*");
 		return 1;
 	}
-	printf("keluar JALUR %s !!!\r\n", __FUNCTION__);
+	printf("keluar JALUR %s tutup soket !!!\r\n", __FUNCTION__);
+	close(ipsumber[no].socket_desc);
 	//sleep(3);
 	return 0;
 }
 
 void ambil_data()	{
-	int i=0, flag=0;
-	printd("  ---%3d/%d : Ambil DATA:\r\n", ++iI, sumber.jmlSumber);
+	int i=0;
+	printd("  ---%3d/%d : Ambil DATA: %d\r\n", ++iI, sumber.jmlSumber, aa++);
 	for (i=0; i<sumber.jmlSumber; i++)	{
-		printd(" %d/%d --> %s ||", ipsumber[i].no, sumber.jmlSumber, ipsumber[i].ip);
+		printd(" %d/%d --> \"%s\" ||", ipsumber[i].no, sumber.jmlSumber, ipsumber[i].ip);
 		if (ipsumber[i].stat_konek==1)	{
-			flag = ambil_data_satuan(i);
+			ambil_data_satuan(i);
+			//parsing_data_satuan(i);
+			//buka_sendiri(i);
 		}
 		if (ipsumber[i].jeda>0)	{
-			printd(" %%%%%%%% Turunkan JEDA %d !\r\n", i);
+			printd(" %%%%%%%% Turunkan JEDA %d -->!\r\n", i, ipsumber[i].jeda);
 			ipsumber[i].jeda--;
 		} else {
 			if (ipsumber[i].stat_konek==0)	{
@@ -246,44 +275,106 @@ void ambil_data()	{
 	
 }
 
+void simpan_ke_file()	{
+	char isifile[1024], perk[20];
+	int i;
+	printf("_______%s: %d === %d\r\n", __FUNCTION__, PER_SUMBER*sumber.jmlSumber, bb++);
+	pFile = fopen ("datamon.txt","a+");
+	if (pFile!=NULL)	{
+		for (i=0; i<(PER_SUMBER*sumber.jmlSumber); i++)	{
+			
+			//if (idData[i]>0)	
+			{
+				sprintf(perk, "%.1f ", data_f[i]);
+				printf("idData[%d]: %.2f ", idData[i], data_f[i]);
+			}
+			strcat(isifile, perk);
+		}
+		strcat(isifile, "\r\n");
+		printf("\r\n");
+		//printf("isiFIle: %s\r\n", isifile);
+		//*/
+		//strcat(isifile, "qwertyu\r\n");
+		fputs (isifile,pFile);
+		fclose (pFile);
+	}
+}
+
 int main(int argc , char *argv[])	{
-	int socket_desc;
-	struct sockaddr_in server;
-	char message[12] , s_reply[300];
-	struct t_xdata st_data;
-	int i, jmlNSock;
+	int i, j, k;
 
 	signal(SIGINT, siginthandler);
-	signal(SIGQUIT, siginthandler);
+	//signal(SIGQUIT, siginthandler);
 	signal(SIGPIPE, sig_pipe);
 	
-	i = akses_file_konfig();
-	printd(" Akses konfig selesai %d\r\n", i);
+	init_var();
 	
-	cek_konfig();
-	printf(" Cek konfig selesai %d/%d\r\n", iI, sumber.jmlSumber);
-	
+	i = akses_file_konfig();	printd(" Akses konfig selesai %d\r\n", i);
+	cek_konfig();	printf(" Cek konfig selesai %d/%d\r\n", iI, sumber.jmlSumber);
 	buka_soket();
 	iI = 0;
+	
+	#if 0
+	buka_sendiri(0);
+	#endif
+	
+	printf("Parent PID(%d): Mulai sedot !!...\n", getpid());
+	
+	#if 1
+
 	while(1)	{
-		sleep(1);
 		ambil_data();
+		usleep(1000);
+		if (j>100)	{
+			//printf("Restart i\r\n");
+			simpan_ke_file();
+			j=0;
+		}
+		j++;
+		//delay(1000);
 	}
+	#endif
 	printf("keluar LOOP !!!\r\n");
 	siginthandler(1);
 	printf("keluar MAIN !!!\r\n");
 	
 	return 0;
+}
 
-
-	//Receive a reply from the server
-	jmlNSock = recv(socket_desc, s_reply , 2000 , 0);
+int buka_sendiri(int i)	{
+	struct t_xdata st_data;
+	char message[20] , s_reply[300];
+	int jmlNSock;
+	
+	sprintf(message, "sampurasun%d", 1);
+	printf("\r\n------------%s ... no: %d, sock desc[%d]: %d, pesan: %s\r\n", __FUNCTION__, i, i, ipsumber[i].socket_desc, message);
+	if( send(ipsumber[i].socket_desc , message , strlen(message) , 0) < 0)    {
+        puts("Send failed");
+        return 1;
+    }
+    printd("Data Send\n");
+	
+	jmlNSock = recv(ipsumber[i].socket_desc, s_reply , 300 , 0);
     if( jmlNSock < 0)    {
         puts("recv failed");
     }
-    printd("Reply received: %d/%d/%d\n", jmlNSock, sizeof(st_data), sizeof(data_f));
-    printd(s_reply);
 	
+	printd("Reply received: %d/%d/%d\n", jmlNSock, sizeof(st_data), sizeof(data_f));
+    printd("%s\r\n", s_reply);
 	
+	memcpy ( &st_data, &s_reply, jmlNSock );
+	memcpy( (char *) &data_f[0], st_data.buf, PER_SUMBER*sizeof(float) );
+    
+    printd("==> %s >> urut:%d >> flag:%d >> alamat:%d\r\n", st_data.mon, st_data.nomer, st_data.flag, st_data.alamat);
+	
+	for(i=0; i<PER_SUMBER; i++)		{
+		printd("%.2f ", data_f[i]);
+	}
+	printd("\r\n");
+	
+	printf("Rehat dulu !!!\r\n");   
+	close(ipsumber[i].socket_desc);
+	sleep(1);
 	return 0;
+
 }
