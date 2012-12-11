@@ -15,23 +15,26 @@
 #include <time.h>
 #include "sock.monita.h"
 
-#define PAKAI_DEBUG			1
+#define PAKAI_DEBUG		
 #define JEDA	2
 
-int printd(const char *format, ...)	{
-#if (PAKAI_DEBUG==1)
+int printd(int prio, const char *format, ...)	{
+#ifdef PAKAI_DEBUG
 	va_list arg;
-	int done;
-
-	va_start (arg, format);
-	done = vfprintf (stdout, format, arg);
-	va_end (arg);
-
+	//printf("prio: %d, debug: %d\r\n", prio, debug);
+	int done=0;
+	if (prio>=debug)	{
+		//printf("prio: %d, debug: %d\r\n", prio, debug);
+		va_start (arg, format);
+		done = vfprintf (stdout, format, arg);
+		va_end (arg);
+	}
+	
 	return done;
 #endif
 }
 
-void siginthandler(int param)	{
+void sig_int(int param)	{
 	printf("\r\n ---- masuk Interupsi !!!!\r\n");
 	free(data_f);
 	free(ipsumber);
@@ -41,9 +44,22 @@ void siginthandler(int param)	{
 }
 
 void sig_pipe(int signum)	{
-	printd("==========> %s:%d, iI: %d\r\n", __FUNCTION__, signum, iI);
+	printd(1000, "==========> %s:%d, iI: %d\r\n", __FUNCTION__, signum, iI);
 	buka_soket_satuan(iI);
 	signal(SIGPIPE, sig_pipe);
+}
+
+void sig_keluar(int signum)	{
+	printd(1000, "==========> %s KELUAR APLIKASI <=========\r\n", __FUNCTION__);
+}
+
+int waktu_atoi(char *waktu)	{
+	int angka = atoi(waktu);
+	if (strchr(waktu, 'm')!=NULL)     //return (angka);
+		angka *= 60;
+	if (strchr(waktu, 'h')!=NULL)     //return (angka);
+		angka *= 3600;
+	return angka;
 }
 
 int parsing_konfig(char *s)	{
@@ -54,14 +70,14 @@ int parsing_konfig(char *s)	{
 	if (pch!=NULL)	return 2;
 	if (strlen(s)>1)	{
 		sscanf(s,"%s = %s", a, b);
-		printd("  ----> a:>>%s<<, b:>>%s<<\r\n", a, b);
-		if (!strcmp(a,"serialport"))	{	printd("%s\r\n", b); strcpy(com_mod.comSer, b); }
-		if (!strcmp(a,"baudrate"))	{		printd("%s\r\n", b); com_mod.baud = atoi(b); }
-		if (!strcmp(a,"soket"))	{			printd("%s\r\n", b); sumber.socket = atoi(b); }
+		printd(5, "  ----> a:>>%s<<, b:>>%s<<\r\n", a, b);
+		if (!strcmp(a,"serialport"))	{	printd(5, "%s\r\n", b); strcpy(com_mod.comSer, b); }
+		if (!strcmp(a,"baudrate"))	{		printd(5, "%s\r\n", b); com_mod.baud = atoi(b); }
+		if (!strcmp(a,"soket"))	{			printd(5, "%s\r\n", b); sumber.socket = atoi(b); }
 		
 		if (!strcmp(a,"jmlsumber"))	{	
-			printd("%s\r\n", b);  sumber.jmlSumber = atoi(b); 
-			printf("======= ALOKASI MEMORI SUMBER dan DATA ========\r\n");
+			printd(5, "%s\r\n", b);  sumber.jmlSumber = atoi(b); 
+			printd(5, "======= ALOKASI MEMORI SUMBER dan DATA ========\r\n");
 			ipsumber = malloc(sumber.jmlSumber * sizeof(struct t_ipsumber));
 			data_f = malloc (sumber.jmlSumber * PER_SUMBER * sizeof(float));
 			idData = malloc (sumber.jmlSumber * PER_SUMBER * sizeof(int));
@@ -79,14 +95,14 @@ int parsing_konfig(char *s)	{
 			}
 		}
 		if (!strcmp(a,"sumber"))	{
-			printd("isinya: %s = %s\r\n", a, b);
+			printd(5, "isinya: %s = %s\r\n", a, b);
 			i=iI+1;
 			if (i>sumber.jmlSumber)	{
 				printf(" --- ERROR Sumber LEBIH !!!\r\n ---\r\n");
 				return 0;
 			}
 			ipsumber[iI].no = i;
-			strcpy(ipsumber[iI].ip, b); printd("%s\r\n", b); 
+			strcpy(ipsumber[iI].ip, b); printd(5, "%s\r\n", b); 
 			iI++;
 			//printd("i: %d, iI: %d\r\n", i, iI);
 		}
@@ -100,6 +116,16 @@ int parsing_konfig(char *s)	{
 				i++;
 			}
 		}
+		
+		if (!strcmp(a,"folderfile"))	{
+			printd(5, "%s\r\n", b); strcpy(sumber.folder, b);
+			mkdir(sumber.folder, 0755);
+		}
+		if (!strcmp(a,"file"))	{	printd(5, "%s\r\n", b); strcpy(sumber.file, b); }
+		if (!strcmp(a,"periodesedot"))	{	printd(5, "%s\r\n", b); sumber.tSedot = waktu_atoi(b); }
+		if (!strcmp(a,"periodesimpan"))	{	printd(5, "%s\r\n", b); sumber.tSimpan = waktu_atoi(b); }
+		if (!strcmp(a,"periodekirim"))	{	printd(5, "%s\r\n", b); com_mod.tKirim = waktu_atoi(b); }
+		if (!strcmp(a,"debug"))	{	printd(1000, "%s\r\n", b); debug = atoi(b); }
 	}
 	return 1;
 }
@@ -109,6 +135,13 @@ void cek_konfig()	{
 	printf("serialport: %s\r\n", com_mod.comSer);
 	printf("baudrate  : %d\r\n", com_mod.baud);
 	printf("socket    : %d\r\n", sumber.socket);
+	printf("Folder    : %s\r\n", sumber.folder);
+	printf("File      : %s\r\n", sumber.file);
+	printf("t sedot   : %d\r\n", sumber.tSedot);
+	printf("t simpan  : %d\r\n", sumber.tSimpan);
+	printf("t kirim   : %d\r\n", com_mod.tKirim);
+	printf("DEBUG     : %d\r\n", debug);
+	
 	printf("Jml Smbr  : %d\r\n", sumber.jmlSumber);
 	for(i=0; i<sumber.jmlSumber; i++)	{
 		printf("%3d. IP: %s\r\n", ipsumber[i].no, ipsumber[i].ip);
@@ -126,7 +159,7 @@ int akses_file_konfig()	{
 	char line [100];
 	pFile = fopen (FILENYA,"r");
 	
-	printd("===> %s masuk !!\r\n", __FUNCTION__);
+	printd(5, "===> %s masuk !!\r\n", __FUNCTION__);
 	if (pFile!=NULL)	{
 		while ( fgets ( line, sizeof line, pFile ) != NULL )	{
 			if (!parsing_konfig(line)) return 0;
@@ -135,37 +168,54 @@ int akses_file_konfig()	{
 		}
 		fclose(pFile);
 	}
-	printd("tutup FILE\r\n");
+	printd(5, "tutup FILE\r\n");
 	return i;
 }
 
 void init_var()		{
+	char kata[20];
 	iI = 0;
 	aa = 02;
 	bb = 1;
+	
+	debug = 100000;
+
+	sumber.tSedot  = 1;		// tiap 1 detik
+	sumber.tSimpan = 60;	// tiap 1 menit
+	com_mod.tKirim  = 3600;	// tiap 1 jam
+
+	signal(SIGINT, sig_int);
+	signal(SIGQUIT, sig_keluar);
+	signal(SIGPIPE, sig_pipe);
+	
+	time_t rawtime;
+	time ( &rawtime );
+	wfile = localtime ( &rawtime );
+	sprintf(kata, "%02d:%02d:%02d ", wfile->tm_hour, wfile->tm_min, wfile->tm_sec);
+	printf("waktu : %s\r\n", kata);
 }
 
 int buka_soket_satuan(int i)	{
 	struct sockaddr_in server_m;
-	printd("~~~~~ %s masuk: soket: %d/%d\r\n", __FUNCTION__, ipsumber[i].socket, ipsumber[i].socket_desc);
+	printd(100, "~~~~~ %s masuk: soket: %d/%d\r\n", __FUNCTION__, ipsumber[i].socket, ipsumber[i].socket_desc);
 	switch (ipsumber[i].socket)	{
 		case -1: // buka lokal socket
-			printd(" +++++ buat socket dulu !!\r\n");
+			printd(5, " +++++ buat socket dulu !!\r\n");
 			ipsumber[i].socket_desc = socket(AF_INET , SOCK_STREAM , 0);
-			printd("socket desc: %d\r\n", ipsumber[i].socket_desc);
+			printd(5, "socket desc: %d\r\n", ipsumber[i].socket_desc);
 			ipsumber[i].socket = 1;
 		case 2:	 // konek socket ke tujuan
-			printd(" +++++ coba buka soket %d/%d\r\n", i, ipsumber[i].socket_desc);
+			printd(5, " +++++ coba buka soket %d/%d\r\n", i, ipsumber[i].socket_desc);
 			server_m.sin_addr.s_addr = inet_addr(ipsumber[i].ip);
 			server_m.sin_family = AF_INET;
 			server_m.sin_port = htons( sumber.socket );
 			ipsumber[i].socket = connect(ipsumber[i].socket_desc, (struct sockaddr *)&server_m , sizeof(server_m));
 			if (ipsumber[i].socket >= 0)		{
-				printd("Connected buka mandiri: %d\r\n", ipsumber[i].socket_desc);
+				printd(5, "Connected buka mandiri: %d\r\n", ipsumber[i].socket_desc);
 				ipsumber[i].stat_konek = 1;
 				ipsumber[i].socket = 2;
 			} else {
-				printd("Tidak nyambung !!! TUTUP SOKET %d !!!\r\n", ipsumber[i].socket_desc);
+				printd(5, "Tidak nyambung !!! TUTUP SOKET %d !!!\r\n", ipsumber[i].socket_desc);
 				ipsumber[i].stat_konek = 0;
 				ipsumber[i].jeda = JEDA;
 				close(ipsumber[i].socket_desc);
@@ -179,24 +229,24 @@ int buka_soket()	{
 	//int socket_desc;
 	struct sockaddr_in server_m[sumber.jmlSumber];
 	
-	printd("===> %s masuk...\r\n", __FUNCTION__);
+	printd(5, "===> %s masuk...\r\n", __FUNCTION__);
 	
 	for (i=0; i<sumber.jmlSumber; i++)	{
 		ipsumber[i].socket_desc = socket(AF_INET , SOCK_STREAM , 0);
-		printd("socket desc: %d\r\n", ipsumber[i].socket_desc);
+		printd(5, "socket desc: %d\r\n", ipsumber[i].socket_desc);
 		ipsumber[i].socket = 1;
 		if (ipsumber[i].socket_desc == -1)	{
-			printd("Could not create socket");
+			printd(5, "Could not create socket");
 		} else {
 			server_m[i].sin_addr.s_addr = inet_addr(ipsumber[i].ip);
 			server_m[i].sin_family = AF_INET;
 			server_m[i].sin_port = htons( sumber.socket );
 			
-			printd("Connect to remote server\r\n");
+			printd(5, "Connect to remote server\r\n");
 			ipsumber[i].socket = connect(ipsumber[i].socket_desc, (struct sockaddr *)&server_m[i] , sizeof(server_m[i]));
 			
 			if (ipsumber[i].socket >= 0)		{
-				printd("Connected %d\r\n", ipsumber[i].socket);
+				printd(5, "Connected %d\r\n", ipsumber[i].socket);
 				ipsumber[i].stat_konek = 1;
 				ipsumber[i].socket = 2;
 			} else {
@@ -222,97 +272,180 @@ int ambil_data_satuan(int no)	{
 
 	jmlNSock = send(ipsumber[no].socket_desc, message, strlen(message), 0);
 	if (jmlNSock < 0)    {
-        printf("Send failed");
+        printf("Send failed %s", ipsumber[no].ip);
         return 1;
     }
     
     if (jmlNSock>0)	{
 		jmlNSock = recv(ipsumber[no].socket_desc, s_reply, 300 , 0);
 		if( jmlNSock <= 0)    {
-			printf("recv failed");
+			printf("recv failed %s", ipsumber[no].ip);
 			//sleep(2);
-			return 0;
+			return 2;
 		}
-		printd("Reply received: %d/%d/%d\n", jmlNSock, sizeof(st_data), sizeof(data_f));
+		printd(5, "Reply received: %d/%d/%d ==== %d\n", jmlNSock, sizeof(st_data), sizeof(data_f), no*PER_SUMBER);
 		//printd(s_reply);
 		
 		memcpy ( &st_data, &s_reply, jmlNSock );
-		memcpy( (char *) &data_f[no], st_data.buf, PER_SUMBER*sizeof(float) );
+		memcpy( (char *) &data_f[no*PER_SUMBER], st_data.buf, PER_SUMBER*sizeof(float) );
 		
-		printd("==> no: %d === %s >> urut:%d >> flag:%d >> alamat:%d\r\n", no, st_data.mon, st_data.nomer, st_data.flag, st_data.alamat);
+		//printd("==> no: %d === %s >> urut:%d >> flag:%d >> alamat:%d\r\n", no, st_data.mon, st_data.nomer, st_data.flag, st_data.alamat);
 		for(i=0; i<PER_SUMBER; i++)		{
-			printd("%.1f ", data_f[no*PER_SUMBER+i]);
+			printd(5, "[%d]: %.1f ", no*PER_SUMBER+i, data_f[no*PER_SUMBER+i]);
 		}
-		printf("*");
-		return 1;
+		printd(5, "\r\n");
+		return 0;
 	}
 	printf("keluar JALUR %s tutup soket !!!\r\n", __FUNCTION__);
+	return 100;
+}
+
+int ambil_mandiri(int no)	{
+	struct sockaddr_in server_m;
+	
+	//printd("===== no: %d,  %s masuk !!\r\n", no, __FUNCTION__);
+	ipsumber[no].socket_desc = socket(AF_INET , SOCK_STREAM , 0);
+	if (ipsumber[no].socket_desc == -1)	{
+		printd(5, "Could not create socket");
+		return 1;
+	} else {
+		server_m.sin_addr.s_addr = inet_addr(ipsumber[no].ip);
+		server_m.sin_family = AF_INET;
+		server_m.sin_port = htons( sumber.socket );
+		
+		printd(5, "Connect to server socket : %d\r\n", ipsumber[no].socket_desc);
+		ipsumber[no].socket = connect(ipsumber[no].socket_desc, (struct sockaddr *)&server_m , sizeof(server_m));
+			
+		if (ipsumber[no].socket >= 0)		{
+			//printd("Connected %d\r\n", ipsumber[no].socket);
+			ipsumber[no].stat_konek = 1;
+			ambil_data_satuan(no);
+		}
+	}
 	close(ipsumber[no].socket_desc);
-	//sleep(3);
 	return 0;
 }
 
+
 void ambil_data()	{
 	int i=0;
-	printd("  ---%3d/%d : Ambil DATA: %d\r\n", ++iI, sumber.jmlSumber, aa++);
+	printd(5, "  ---%3d/%d : Ambil DATA: %d\r\n", ++iI, sumber.jmlSumber, aa++);
 	for (i=0; i<sumber.jmlSumber; i++)	{
-		printd(" %d/%d --> \"%s\" ||", ipsumber[i].no, sumber.jmlSumber, ipsumber[i].ip);
-		if (ipsumber[i].stat_konek==1)	{
-			ambil_data_satuan(i);
-			//parsing_data_satuan(i);
-			//buka_sendiri(i);
-		}
-		if (ipsumber[i].jeda>0)	{
-			printd(" %%%%%%%% Turunkan JEDA %d -->!\r\n", i, ipsumber[i].jeda);
-			ipsumber[i].jeda--;
-		} else {
-			if (ipsumber[i].stat_konek==0)	{
-				printd(" ---- COBA BUKA SOKET LAGI %d !!!\r\n", i);
-				buka_soket_satuan(i);
-			}
-		}
+		printd(5, " %d/%d --> \"%s\" ||", ipsumber[i].no, sumber.jmlSumber, ipsumber[i].ip);
+		ambil_mandiri(i);
 	}
 	
 }
 
+void hitung_wkt(int w, int *wx)	{
+	int aW[] = {1, 60, 60, 24, 365, 1};
+	int i=0;
+	
+	for (i=0; i<5; i++)	{
+		wx[i] = w /= (int) aW[i];
+		//printf("wx[%d]: %d, w:%d, aW[%d]\r\n",i, wx[i], w, i, aW[i]);
+		if (wx[i]>=aW[i+1] && i<4)
+			wx[i] %= aW[i+1];
+		//printf("wx[%d]: %d\r\n",i , wx[i]);
+	}
+}	
+
+int cek_file()	{
+	int w[6], i, baru=0;
+	
+	hitung_wkt(sumber.tSimpan, &w);
+	printf("w0: %d. w1: %d. w2: %d. w3: %d. w4: %d\r\n", w[0], w[1], w[2], w[3], w[4]);
+	
+	for(i=0; i<5; i++)	{
+		
+	}
+	return baru;
+}
+
+int nama_file_simpan(char *namafile)	{
+	int baru=0;
+	
+	printd(1000, "++++++++++= masuk %s\r\n", __FUNCTION__);
+	char nfbaru[30], *pchak;
+	time_t rawtime;
+	struct tm * ti;
+
+	time ( &rawtime );
+	ti = localtime ( &rawtime );
+	
+	pchak = strrchr(sumber.file, '.');
+	strncpy (nfbaru, sumber.file, pchak-sumber.file);
+
+	if ( (nfbaru==NULL) || (pchak==NULL) )		return 0;
+	
+	baru = cek_file();
+	if (baru)	{
+		sprintf(nfbaru, "%s.%d%02d%02d.%02d%02d%s", nfbaru, ti->tm_year+1900, ti->tm_mon+1, ti->tm_mday, ti->tm_hour, \
+			ti->tm_min, pchak);
+		printf("namafile: %s\r\n", nfbaru);
+		
+	} else	{
+		sprintf(nfbaru, "%s.%d%02d%02d.%02d%02d%s", nfbaru, wfile->tm_year+1900, wfile->tm_mon+1, wfile->tm_mday, \
+			wfile->tm_hour, wfile->tm_min, pchak);
+		printf("namafile: %s\r\n", nfbaru);
+	}
+
+	strcpy(namafile, nfbaru);
+
+	return 1;
+}
+
 void simpan_ke_file()	{
-	char isifile[1024], perk[20];
-	int i;
-	printf("_______%s: %d === %d\r\n", __FUNCTION__, PER_SUMBER*sumber.jmlSumber, bb++);
+	char isifile[512], perk[30];
+	int i, j=0;
+	
+	time_t rawtime;
+	struct tm * ti;
+
+	time ( &rawtime );
+	ti = localtime ( &rawtime );
+	
+	printd(5, "_______%s: %d === %d\r\n", __FUNCTION__, PER_SUMBER*sumber.jmlSumber, bb++);
+	
+	nama_file_simpan(perk);
+	printf("file baru: %s\r\n", perk);
+	
 	pFile = fopen ("datamon.txt","a+");
 	if (pFile!=NULL)	{
+		sprintf(perk, "%02d:%02d:%02d ", ti->tm_hour, ti->tm_min, ti->tm_sec);
+		strcpy(isifile, perk);
+		printf("waktu: %s\r\n", isifile);
 		for (i=0; i<(PER_SUMBER*sumber.jmlSumber); i++)	{
-			
-			//if (idData[i]>0)	
-			{
+			if (idData[i]>0)	{
 				sprintf(perk, "%.1f ", data_f[i]);
-				printf("idData[%d]: %.2f ", idData[i], data_f[i]);
+				//printf("[%d]: %.2f ", idData[i], data_f[i]);
+				strcat(isifile, perk);
+				j++;
 			}
-			strcat(isifile, perk);
 		}
-		strcat(isifile, "\r\n");
-		printf("\r\n");
-		//printf("isiFIle: %s\r\n", isifile);
-		//*/
-		//strcat(isifile, "qwertyu\r\n");
-		fputs (isifile,pFile);
+		strcat(isifile, "\r");
+		printd(5, "\r\n Data disimpan: %d\r\n", j);
+		fputs (isifile, pFile);
 		fclose (pFile);
 	}
 }
 
 int main(int argc , char *argv[])	{
-	int i, j, k;
-
-	signal(SIGINT, siginthandler);
-	//signal(SIGQUIT, siginthandler);
-	signal(SIGPIPE, sig_pipe);
+	int i;
 	
 	init_var();
 	
-	i = akses_file_konfig();	printd(" Akses konfig selesai %d\r\n", i);
-	cek_konfig();	printf(" Cek konfig selesai %d/%d\r\n", iI, sumber.jmlSumber);
-	buka_soket();
+	i = akses_file_konfig();	printd(5, " Akses konfig selesai %d\r\n", i);
+	cek_konfig();	printd(5, " Cek konfig selesai %d/%d\r\n", iI, sumber.jmlSumber);
+	//buka_soket();
 	iI = 0;
+
+	time_t rawtime;
+	struct tm * ti;
+
+	time ( &rawtime );
+	ti = localtime ( &rawtime );
+	printd(1000, "waktu : %d-%d-%d %d:%d:%d\r\n", ti->tm_mday, ti->tm_mon, ti->tm_year, ti->tm_hour, ti->tm_min, ti->tm_sec);
 	
 	#if 0
 	buka_sendiri(0);
@@ -324,14 +457,9 @@ int main(int argc , char *argv[])	{
 
 	while(1)	{
 		ambil_data();
-		usleep(1000);
-		if (j>100)	{
-			//printf("Restart i\r\n");
-			simpan_ke_file();
-			j=0;
-		}
-		j++;
-		//delay(1000);
+		simpan_ke_file();
+		//sleep(sumber.tSedot);
+		sleep(sumber.tSedot);
 	}
 	#endif
 	printf("keluar LOOP !!!\r\n");
@@ -352,25 +480,25 @@ int buka_sendiri(int i)	{
         puts("Send failed");
         return 1;
     }
-    printd("Data Send\n");
+    printd(100, "Data Send\n");
 	
 	jmlNSock = recv(ipsumber[i].socket_desc, s_reply , 300 , 0);
     if( jmlNSock < 0)    {
         puts("recv failed");
     }
 	
-	printd("Reply received: %d/%d/%d\n", jmlNSock, sizeof(st_data), sizeof(data_f));
-    printd("%s\r\n", s_reply);
+	printd(100, "Reply received: %d/%d/%d\n", jmlNSock, sizeof(st_data), sizeof(data_f));
+    printd(100, "%s\r\n", s_reply);
 	
 	memcpy ( &st_data, &s_reply, jmlNSock );
 	memcpy( (char *) &data_f[0], st_data.buf, PER_SUMBER*sizeof(float) );
     
-    printd("==> %s >> urut:%d >> flag:%d >> alamat:%d\r\n", st_data.mon, st_data.nomer, st_data.flag, st_data.alamat);
+    printd(100, "==> %s >> urut:%d >> flag:%d >> alamat:%d\r\n", st_data.mon, st_data.nomer, st_data.flag, st_data.alamat);
 	
 	for(i=0; i<PER_SUMBER; i++)		{
-		printd("%.2f ", data_f[i]);
+		printd(100, "%.2f ", data_f[i]);
 	}
-	printd("\r\n");
+	printd(100, "\r\n");
 	
 	printf("Rehat dulu !!!\r\n");   
 	close(ipsumber[i].socket_desc);

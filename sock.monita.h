@@ -16,20 +16,25 @@ struct t_xdata {
 struct t_modem	{
 	int baud;
 	char comSer[10];
+	int tKirim;
 };
 
 struct t_ipsumber		{
 	int no;
 	char ip[16];
-	int socket_desc;
-	int socket;
-	int jeda;				// delay ketika socket mati
+	int socket_desc;		// koneksi socket tiap modul
+	int socket;				// 
+	int jeda;				// delay ketika socket mati --> tidak jadi karena soket langsung ditutup
 	int stat_konek;
 };
 
 struct t_tuj	{
 	int jmlSumber;
-	int socket;
+	int socket;				// socket modul monita
+	int tSedot;
+	int tSimpan;
+	char folder[20];
+	char file[20];
 };
 
 struct t_modem com_mod;
@@ -42,7 +47,8 @@ int *idData;
 FILE * pFile;
 
 int aa, bb;
-int iI;
+int iI, debug;
+struct tm * wfile;
 
 void siginthandler(int param);
 void sig_pipe(int signum);
@@ -50,8 +56,9 @@ void sig_pipe(int signum);
 void cek_konfig();
 void ambil_data();
 int buka_sendiri();
+int waktu_atoi(char *waktu);
 
-int printd(const char *format, ...);
+int printd(int prio, const char *format, ...);
 int akses_file_konfig(void);
 int parsing_konfig(char *s);
 int buka_soket_satuan(int i);
