@@ -32,7 +32,7 @@ struct t_tuj	{
 	int jmlSumber;
 	int socket;				// socket modul monita
 	int tSedot;
-	int tSimpan;
+	int tFile;
 	char folder[20];
 	char file[20];
 };
@@ -48,6 +48,7 @@ FILE * pFile;
 
 int aa, bb;
 int iI, debug;
+time_t xtime;
 struct tm * wfile;
 
 void siginthandler(int param);

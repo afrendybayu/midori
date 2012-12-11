@@ -123,7 +123,7 @@ int parsing_konfig(char *s)	{
 		}
 		if (!strcmp(a,"file"))	{	printd(5, "%s\r\n", b); strcpy(sumber.file, b); }
 		if (!strcmp(a,"periodesedot"))	{	printd(5, "%s\r\n", b); sumber.tSedot = waktu_atoi(b); }
-		if (!strcmp(a,"periodesimpan"))	{	printd(5, "%s\r\n", b); sumber.tSimpan = waktu_atoi(b); }
+		if (!strcmp(a,"periodefile"))	{	printd(5, "%s\r\n", b); sumber.tFile = waktu_atoi(b); }
 		if (!strcmp(a,"periodekirim"))	{	printd(5, "%s\r\n", b); com_mod.tKirim = waktu_atoi(b); }
 		if (!strcmp(a,"debug"))	{	printd(1000, "%s\r\n", b); debug = atoi(b); }
 	}
@@ -138,7 +138,7 @@ void cek_konfig()	{
 	printf("Folder    : %s\r\n", sumber.folder);
 	printf("File      : %s\r\n", sumber.file);
 	printf("t sedot   : %d\r\n", sumber.tSedot);
-	printf("t simpan  : %d\r\n", sumber.tSimpan);
+	printf("t File    : %d\r\n", sumber.tFile);
 	printf("t kirim   : %d\r\n", com_mod.tKirim);
 	printf("DEBUG     : %d\r\n", debug);
 	
@@ -181,16 +181,16 @@ void init_var()		{
 	debug = 100000;
 
 	sumber.tSedot  = 1;		// tiap 1 detik
-	sumber.tSimpan = 60;	// tiap 1 menit
-	com_mod.tKirim  = 3600;	// tiap 1 jam
+	sumber.tFile   = 60;	// tiap 1 menit
+	com_mod.tKirim = 3600;	// tiap 1 jam
 
 	signal(SIGINT, sig_int);
 	signal(SIGQUIT, sig_keluar);
 	signal(SIGPIPE, sig_pipe);
 	
-	time_t rawtime;
-	time ( &rawtime );
-	wfile = localtime ( &rawtime );
+	
+	time ( &xtime );
+	wfile = localtime ( &xtime );
 	sprintf(kata, "%02d:%02d:%02d ", wfile->tm_hour, wfile->tm_min, wfile->tm_sec);
 	printf("waktu : %s\r\n", kata);
 }
@@ -351,69 +351,113 @@ void hitung_wkt(int w, int *wx)	{
 }	
 
 int cek_file()	{
-	int w[6], i, baru=0;
+	//int w[6], i, baru=0;
+	double beda;
 	
-	hitung_wkt(sumber.tSimpan, &w);
-	printf("w0: %d. w1: %d. w2: %d. w3: %d. w4: %d\r\n", w[0], w[1], w[2], w[3], w[4]);
+	char wx[30];
 	
-	for(i=0; i<5; i++)	{
-		
+	time_t now;
+	time ( &now );
+	
+	sprintf(wx, "%d-%02d-%02d %02d:%02d:%02d", wfile->tm_year+1900, wfile->tm_mon+1, wfile->tm_mday, \
+		wfile->tm_hour, wfile->tm_min, wfile->tm_sec);
+	printd(5, "wx: %s  ------", wx);
+	
+	beda = difftime (now, xtime);
+	printd(1000, "----------------------beda: %.2lf / %d\r\n", beda, sumber.tFile);
+	
+	if ((int) beda >= sumber.tFile)	{
+		time ( &xtime );
+		return 1;
 	}
-	return baru;
+	
+	return 0;
 }
 
 int nama_file_simpan(char *namafile)	{
 	int baru=0;
 	
-	printd(1000, "++++++++++= masuk %s\r\n", __FUNCTION__);
+	printd(5, "++++++++++= masuk %s\r\n", __FUNCTION__);
 	char nfbaru[30], *pchak;
 	time_t rawtime;
 	struct tm * ti;
 
 	time ( &rawtime );
-	ti = localtime ( &rawtime );
-	
+
 	pchak = strrchr(sumber.file, '.');
 	strncpy (nfbaru, sumber.file, pchak-sumber.file);
 
 	if ( (nfbaru==NULL) || (pchak==NULL) )		return 0;
-	
+
 	baru = cek_file();
+	printf("cek file: %d\r\n", baru);
 	if (baru)	{
+		ti = localtime ( &rawtime );
 		sprintf(nfbaru, "%s.%d%02d%02d.%02d%02d%s", nfbaru, ti->tm_year+1900, ti->tm_mon+1, ti->tm_mday, ti->tm_hour, \
 			ti->tm_min, pchak);
-		printf("namafile: %s\r\n", nfbaru);
-		
+		printf("=========== BUAT NAMA BARU !!!!!\r\n");
+		baru = 1;
 	} else	{
+		wfile = localtime ( &xtime );
 		sprintf(nfbaru, "%s.%d%02d%02d.%02d%02d%s", nfbaru, wfile->tm_year+1900, wfile->tm_mon+1, wfile->tm_mday, \
 			wfile->tm_hour, wfile->tm_min, pchak);
-		printf("namafile: %s\r\n", nfbaru);
 	}
-
+	//printd(1000, "namafile: %s\r\n", nfbaru);
 	strcpy(namafile, nfbaru);
 
-	return 1;
+	return baru;
 }
 
 void simpan_ke_file()	{
 	char isifile[512], perk[30];
-	int i, j=0;
+	int i, j=0, baru;
 	
-	time_t rawtime;
-	struct tm * ti;
-
-	time ( &rawtime );
-	ti = localtime ( &rawtime );
+	time_t now;
+	struct tm * tix;
 	
 	printd(5, "_______%s: %d === %d\r\n", __FUNCTION__, PER_SUMBER*sumber.jmlSumber, bb++);
 	
-	nama_file_simpan(perk);
+	//if (getcwd(perk, sizeof(perk)) != NULL)	
+	/*
+	getcwd(isifile, 512);
+	{
+		printf("Current working dir: %s\n", isifile);
+	}
+	//*/
+	
+	
+	/*
+	if (!chdir(sumber.folder))	{
+		printf("ERROR directory !!!");
+	}
+	//*/
+	
+	
+	baru = nama_file_simpan(perk);
 	printf("file baru: %s\r\n", perk);
 	
-	pFile = fopen ("datamon.txt","a+");
+	time ( &now );
+	tix = localtime ( &now );
+	
+	pFile = fopen (perk,"a+");
 	if (pFile!=NULL)	{
-		sprintf(perk, "%02d:%02d:%02d ", ti->tm_hour, ti->tm_min, ti->tm_sec);
-		strcpy(isifile, perk);
+		if (baru)	{
+			printf("========== file baru +++++++++++++++\r\n");
+			sprintf(perk, "waktu ");
+			strcpy(isifile, perk);
+			for (i=0; i<(PER_SUMBER*sumber.jmlSumber); i++)	{
+				if (idData[i]>0)	{
+					sprintf(perk, "%d ", idData[i]);
+					strcat(isifile, perk);
+				}
+			}
+			strcat(isifile, "\r\n");
+		} else {
+			strcpy(isifile, "");
+		}
+
+		sprintf(perk, "%02d:%02d:%02d ", tix->tm_hour, tix->tm_min, tix->tm_sec);
+		strcat(isifile, perk);
 		printf("waktu: %s\r\n", isifile);
 		for (i=0; i<(PER_SUMBER*sumber.jmlSumber); i++)	{
 			if (idData[i]>0)	{
@@ -423,7 +467,7 @@ void simpan_ke_file()	{
 				j++;
 			}
 		}
-		strcat(isifile, "\r");
+		strcat(isifile, "\r\n");
 		printd(5, "\r\n Data disimpan: %d\r\n", j);
 		fputs (isifile, pFile);
 		fclose (pFile);
