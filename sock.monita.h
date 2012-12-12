@@ -33,7 +33,7 @@ struct t_tuj	{
 	int socket;				// socket modul monita
 	int tSedot;
 	int tFile;
-	char folder[20];
+	char folder[100];
 	char file[20];
 };
 
@@ -63,7 +63,7 @@ int printd(int prio, const char *format, ...);
 int akses_file_konfig(void);
 int parsing_konfig(char *s);
 int buka_soket_satuan(int i);
-int buka_soket();
+//int buka_soket();
 int ambil_data_satuan(int no);
 int parsing_data_satuan(int no);
 
