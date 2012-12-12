@@ -1,6 +1,7 @@
 
 #define PER_SUMBER		20
 #define FILENYA			"mon_konfig.cfg"
+#define PID_FILE		"monita_sock.pid"
 
 
 
@@ -34,6 +35,7 @@ struct t_tuj	{
 	int tSedot;
 	int tFile;
 	char folder[100];
+	char folderdata[20];
 	char file[20];
 };
 
@@ -66,4 +68,4 @@ int buka_soket_satuan(int i);
 //int buka_soket();
 int ambil_data_satuan(int no);
 int parsing_data_satuan(int no);
-
+int simpan_ke_file();

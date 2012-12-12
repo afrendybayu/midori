@@ -8,6 +8,7 @@
 #include <stdarg.h>
 #include <stdlib.h>
 #include <sys/socket.h>
+#include <sys/stat.h>
 #include <string.h>
 #include <arpa/inet.h>	//inet_addr
 #include <signal.h>
@@ -35,10 +36,25 @@ int printd(int prio, const char *format, ...)	{
 }
 
 void sig_int(int param)	{
+	char kata[100];
+	struct stat sts;
+	
 	printf("\r\n ---- masuk Interupsi !!!!\r\n");
 	free(data_f);
 	free(ipsumber);
 	printf(">>>>>>>>>>> Free Memory\r\n");
+	
+	sprintf(kata, "%s%s", sumber.folder, PID_FILE);
+	//st = stat (kata, &sts);
+	//printf("st: %d\r\n", st);
+	if (!stat (kata, &sts))	{
+		printf ("Hapus File %s...", PID_FILE);
+		if (remove(kata) == 0)
+			printf(" TERHAPUS.\r\n");
+		else 
+			printf(" GAGAL.\r\n");
+	}
+	
 	sleep(1);
 	exit(1);
 }
@@ -118,9 +134,11 @@ int parsing_konfig(char *s)	{
 			}
 		}
 		
-		if (!strcmp(a,"folderfile"))	{
-			printd(5, "%s\r\n", b); strcpy(sumber.folder, b);
-			mkdir(sumber.folder, 0755);
+		if (!strcmp(a,"folderutama"))	{	printd(5, "%s\r\n", b); strcpy(sumber.folder, b); }
+		if (!strcmp(a,"folderdata"))	{
+			printd(5, "%s\r\n", b); strcpy(sumber.folderdata, b);
+			sprintf(b, "%s%s", sumber.folder, sumber.folderdata);
+			mkdir(b, 0755);
 		}
 		if (!strcmp(a,"file"))	{	printd(5, "%s\r\n", b); strcpy(sumber.file, b); }
 		if (!strcmp(a,"periodesedot"))	{	printd(5, "%s\r\n", b); sumber.tSedot = waktu_atoi(b); }
@@ -190,6 +208,13 @@ void init_var()		{
 	signal(SIGPIPE, sig_pipe);
 	
 	
+	pFile = fopen (PID_FILE,"a+");
+	if (pFile!=NULL)	{
+		sprintf(kata, "%d", getpid());
+		fputs (kata, pFile);
+		fclose (pFile);
+	}
+
 	time ( &xtime );
 	wfile = localtime ( &xtime );
 	sprintf(kata, "%02d:%02d:%02d ", wfile->tm_hour, wfile->tm_min, wfile->tm_sec);
@@ -343,21 +368,6 @@ void ambil_data()	{
 	
 }
 
-#if 0
-void hitung_wkt(int w, int *wx)	{
-	int aW[] = {1, 60, 60, 24, 365, 1};
-	int i=0;
-	
-	for (i=0; i<5; i++)	{
-		wx[i] = w /= (int) aW[i];
-		//printf("wx[%d]: %d, w:%d, aW[%d]\r\n",i, wx[i], w, i, aW[i]);
-		if (wx[i]>=aW[i+1] && i<4)
-			wx[i] %= aW[i+1];
-		//printf("wx[%d]: %d\r\n",i , wx[i]);
-	}
-}	
-#endif
-
 int cek_file()	{
 	//int w[6], i, baru=0;
 	double beda;
@@ -405,7 +415,7 @@ int nama_file_simpan(char *namafile)	{
 		ti = localtime ( &rawtime );
 		sprintf(nfbaru, "%s.%d%02d%02d.%02d%02d%s", nfbaru, ti->tm_year+1900, ti->tm_mon+1, ti->tm_mday, ti->tm_hour, \
 			ti->tm_min, pchak);
-		printf("=========== BUAT NAMA BARU !!!!!\r\n");
+		printd(5, "=========== BUAT NAMA BARU !!!!!\r\n");
 		baru = 1;
 	} else	{
 		wfile = localtime ( &xtime );
@@ -418,35 +428,35 @@ int nama_file_simpan(char *namafile)	{
 	return baru;
 }
 
-void simpan_ke_file()	{
-	char isifile[512], perk[30];
+int simpan_ke_file()	{
+	char isifile[512], perk[30], sl[128];
 	int i, j=0, baru;
 	
 	time_t now;
 	struct tm * tix;
+	struct stat sts;
 	
 	printd(5, "_______%s: %d === %d\r\n", __FUNCTION__, PER_SUMBER*sumber.jmlSumber, bb++);
 	
-	getcwd(isifile, 512);
-	printf("pwd: %s\r\n", isifile);
-	/*
-	getcwd(isifile, 512);
-	{
-		printf("Current working dir: %s\n", isifile);
+	//getcwd(isifile, 512);
+	//printf("pwd: %s/%s\r\n", isifile, sumber.folder);
+	sprintf(sl, "%s%s", sumber.folder, sumber.folderdata);
+	if (chdir(sl))	{
+		//printf("&*()*&*()_ GAGAL chdir \r\n");
+		printf("____ FOLDER TIDAK DITEMUKAN ____\r\n");
+		return 1;
 	}
-	//*/
-	
-	
-	/*
-	if (!chdir(sumber.folder))	{
-		printf("ERROR directory !!!");
-	}
-	//*/
-	
-	
+
 	baru = nama_file_simpan(perk);
-	printf("file baru: %s\r\n", perk);
-	sprintf(isifile, "%s/%s", sumber.folder, perk);
+	printd(100, "file baru: %s\r\n", perk);
+	sprintf(sl, "%s%s/%s", sumber.folder, sumber.folderdata, perk);
+	
+	i = stat (sl, &sts);
+	printf("i: %d, sl %s\r\n", i, sl);
+	if (i == -1)	{
+		printd (100, "File %s belum ada...\n", perk);
+		baru = 1;
+	}
 	
 	time ( &now );
 	tix = localtime ( &now );
@@ -454,7 +464,7 @@ void simpan_ke_file()	{
 	pFile = fopen (perk,"a+");
 	if (pFile!=NULL)	{
 		if (baru)	{
-			printd(5, "========== file baru +++++++++++++++\r\n");
+			printd(100, "========== file baru +++++++++++++++\r\n");
 			sprintf(perk, "waktu ");
 			strcpy(isifile, perk);
 			for (i=0; i<(PER_SUMBER*sumber.jmlSumber); i++)	{
@@ -470,7 +480,7 @@ void simpan_ke_file()	{
 
 		sprintf(perk, "%02d:%02d:%02d ", tix->tm_hour, tix->tm_min, tix->tm_sec);
 		strcat(isifile, perk);
-		printf("waktu: %s\r\n", isifile);
+		printd(1000, "waktu: %s\r\n", isifile);
 		for (i=0; i<(PER_SUMBER*sumber.jmlSumber); i++)	{
 			if (idData[i]>0)	{
 				sprintf(perk, "%.1f ", data_f[i]);
@@ -484,6 +494,7 @@ void simpan_ke_file()	{
 		fputs (isifile, pFile);
 		fclose (pFile);
 	}
+	return 0;
 }
 
 int main(int argc , char *argv[])	{
