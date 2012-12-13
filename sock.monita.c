@@ -17,6 +17,7 @@
 #include <time.h>
 #include <regex.h>
 #include "sock.monita.h"
+#include <pthread.h>
 
 #include <stdio.h> //printf
 #include <string.h> //memset
@@ -29,6 +30,8 @@
 
 #define PAKAI_DEBUG		
 #define JEDA	2
+
+pthread_mutex_t mutex1 = PTHREAD_MUTEX_INITIALIZER;
 
 int printd(int prio, const char *format, ...)	{
 #ifdef PAKAI_DEBUG
@@ -51,9 +54,10 @@ void sig_int(int param)	{
 	struct stat sts;
 	
 	printf("\r\n ---- masuk Interupsi !!!!\r\n");
+	
 	free(data_f);
 	free(ipsumber);
-	printf(">>>>>>>>>>> Free Memory\r\n");
+	printf(">>>>>>>>>>> Free Memory\r\n");	
 	
 	sprintf(kata, "%s%s", sumber.folder, PID_FILE);
 	//st = stat (kata, &sts);
@@ -189,45 +193,47 @@ int parsing_konfig(char *s)	{
 		if (!strcmp(a,"periodekirim"))	{	printd(5, "%s\r\n", b); com_mod.tKirim = waktu_atoi(b); }
 		if (!strcmp(a,"debug"))	{	printd(1000, "%s\r\n", b); g.debug = atoi(b); }
 		if (!strcmp(a,"modul"))	{	printd(5, "%s\r\n", b); strcpy(g.modul, b); }
-		
-		if (!strcmp(a,"servertujuan"))	{	printd(5, "%s\r\n", b); 
-			ip_valid(b);
+
+		if (!strcmp(a,"servertujuan"))	{	printd(5, "%s\r\n", b);
 			strcpy(penerima.server, b); 
+			ip_valid(b);
+			strcpy(penerima.serverip, b); 
 			//printf("IP server: %s\r\n", penerima.server);
 		}
-		if (!strcmp(a,"porttujuan"))	{	printd(5, "%s\r\n", b); penerima.port = atoi(b); }
+		
 		if (!strcmp(a,"filetujuan"))	{	printd(5, "%s\r\n", b); strcpy(penerima.file, b); }
 		if (!strcmp(a,"httppost"))	{	printd(5, "%s\r\n", b); 
 			if ( (!strcmp(b,"yes")) || (!strcmp(b,"ya")) || (!strcmp(b,"1")) )
 					penerima.httppost = 1;
 			else 	penerima.httppost = 0;
 		}
+		if (!strcmp(a,"porthttppost"))	{	printd(5, "%s\r\n", b); penerima.porthttppost = atoi(b); }
 		if (!strcmp(a,"ftp"))	{	printd(5, "%s\r\n", b); 
 			if ( (!strcmp(b,"yes")) || (!strcmp(b,"ya")) || (!strcmp(b,"1")) )
 					penerima.ftp = 1;
 			else 	penerima.ftp = 0;
 		}
 	}
-	return 1;
+	return 1;	
 }
 
 void cek_konfig()	{
 	int i=0, j;
+	
 	printf("MODUL      : %s\r\n", g.modul);
-	printf("serialport : %s\r\n", com_mod.comSer);
-	printf("baudrate   : %d\r\n", com_mod.baud);
-	printf("socket     : %d\r\n", sumber.socket);
-	printf("Folder     : %s\r\n", sumber.folder);
-	printf("File       : %s\r\n", sumber.file);
+	printf("SERIALPORT : %s\r\n", com_mod.comSer);
+	printf("  baudrate : %d\r\n", com_mod.baud);
+	printf("  socket   : %d\r\n", sumber.socket);
+	printf("  Folder   : %s\r\n", sumber.folder);
+	printf("  File     : %s\r\n", sumber.file);
 	printf("t sedot    : %d\r\n", sumber.tSedot);
 	printf("t File     : %d\r\n", sumber.tFile);
 	printf("t kirim    : %d\r\n", com_mod.tKirim);
-	printf("SERVER     : %s\r\n", penerima.server);
+	printf("SERVER     : %s : %s\r\n", penerima.server, penerima.serverip);
 	printf("  port     : %d\r\n", penerima.port);
 	printf("  file     : %s\r\n", penerima.file);
-	printf("  httppost : %s\r\n", (penerima.httppost==1)?"YA":"tidak");
-	printf("  ftp      : %s\r\n", (penerima.ftp==1)?"YA":"tidak");
-	
+	printf("  httppost : %s\r\n", (penerima.httppost==1)?"YA":"Tidak");
+	printf("  ftp      : %s\r\n", (penerima.ftp==1)?"YA":"Tidak");
 	printf("DEBUG      : %d\r\n", g.debug);
 	
 	printf("Jml Smbr   : %d\r\n", sumber.jmlSumber);
@@ -242,7 +248,20 @@ void cek_konfig()	{
 	}
 }
 
-int akses_file_konfig()	{
+void hitung_wkt(unsigned int w, int *wx)	{
+	int aW[] = {1, 60, 60, 24, 365, 1};
+	char i=0;
+	
+	for (i=0; i<5; i++)	{
+		wx[i] = w /= (int) aW[i];
+		//printf("wx[%d]: %d, w:%d, aW[%d]\r\n",i,  wx[i], w, i, aW[i]);
+		if (wx[i]>=aW[i+1] && i<4)
+			wx[i] %= aW[i+1];
+		//printf("wx[%d]: %d\r\n",i,  wx[i]);
+	}
+}
+
+int akses_file_konfig()		{
 	int i=0, max=100;
 	char line [100];
 	pFile = fopen (FILENYA,"r");
@@ -267,16 +286,16 @@ void init_var()		{
 	bb = 1;
 	
 	g.debug = 100000;
+	g.st_thread = 0;
 
 	sumber.tSedot  = 1;		// tiap 1 detik
 	sumber.tFile   = 60;	// tiap 1 menit
 	com_mod.tKirim = 3600;	// tiap 1 jam
 
 	signal(SIGINT, sig_int);
-	signal(SIGQUIT, sig_keluar);
+	//signal(SIGQUIT, sig_keluar);
 	signal(SIGPIPE, sig_pipe);
-	
-	
+
 	pFile = fopen (PID_FILE,"a+");
 	if (pFile!=NULL)	{
 		sprintf(kata, "%d", getpid());
@@ -434,7 +453,6 @@ void ambil_data()	{
 		printd(5, " %d/%d --> \"%s\" ", ipsumber[i].no, sumber.jmlSumber, ipsumber[i].ip);
 		ambil_mandiri(i);
 	}
-	
 }
 
 int cek_file()	{
@@ -566,8 +584,87 @@ int simpan_ke_file()	{
 	return 0;
 }
 
+int kirim_httpport(char *ip, char sfile)	{
+	int sockfd, n;
+	struct sockaddr_in servaddr;
+	char header[MAX_ISI], isifile[MAX_ISI];
+	
+	if( (sockfd = socket(AF_INET,SOCK_STREAM,IPPROTO_TCP)) == -1 ){
+        printf("socket: error");
+        exit(0);
+    }
+    bzero(&servaddr,sizeof(servaddr));
+    servaddr.sin_family = AF_INET;
+    servaddr.sin_port = htons(penerima.port);  //connect to http server
+    
+    if(inet_pton(AF_INET, argv[1], &servaddr.sin_addr) < 0){
+        printf("port: assigned invalid");
+        exit(0);
+    }
+    if( connect(sockfd,(struct sockaddr *)&servaddr,sizeof(servaddr)) == -1){
+        printf("connect: error");
+        exit(0);
+    }
+    bzero(&header,sizeof(header));
+    
+    n = (strlen(to_send)+strlen(sfile)+287);
+    
+    sprintf(header,"POST %s HTTP1.1\r\nAccept: */*\r\nUser-Agent: BalungKirik/1.0\r\n", argv[2]);
+	sprintf(header,"%sContent-Type: multipart/form-data; boundary=B4LunK1r1K\r\n", header);
+	//sprintf(header,"%sAccept-Encoding: gzip, deflate\r\n", header);
+	sprintf(header,"%sContent-Length: %d\r\n\r\n", header, gr);
+	sprintf(header,"%s\r\n\0", header);
+	
+	sprintf(header,"%s--B4LunK1r1K\r\n", header);
+	sprintf(header,"%sContent-Disposition: form-data; name=\"nilai1\"\r\n", header);
+	sprintf(header,"%s\r\n\0", header);
+	
+	sprintf(header,"%sInidanItuinaintqdq qjdpqkdq kdqd qodk qk\r\n", header);
+	sprintf(header,"%s--B4LunK1r1K\r\n", header);
+	sprintf(header,"%sContent-Disposition: form-data; name=\"file\"; filename=\"%s\"\r\n", header, name);
+	sprintf(header,"%sContent-Type: text/plain\r\n", header);
+	sprintf(header,"%s\r\n\0", header);
+	
+	sprintf(header,"%s%s\r\n", header, to_send);
+	sprintf(header,"%s--B4LunK1r1K\r\n\0", header);
+    
+    printf("--------------------------------data kirim: \r\n");
+    //printf("%s\r\n---------------------------------\r\n\r\n", header);
+    
+    if(write(sockfd,header,strlen(header)+1) == -1)
+        printf("write");
+    
+    while ((n = read(sockfd,recvline,sizeof(recvline))) > 0){
+        recvline[n] = 0;
+        //printf("recv: %s\r\n", recvline);
+        if(fputs(recvline,stdout) == EOF)
+            printf("read error");            
+    }
+    
+    close(sockfd);
+}
+
+void *kirim_paket(void *argv)	{
+	pthread_mutex_lock( &mutex1 );
+	char ipnya[50];
+	
+	
+	printd(1000, "---------- Konter : %d KIRIM PAKET\r\n", counter++);
+	strcpy(ipnya, penerima.server);
+	ip_valid(ipnya);
+	
+	
+	printf("----===> KELUAR LOOP THREAD !!!\r\n");
+
+
+	printf("----===> akhir THREAD !!!\r\n");
+
+	pthread_mutex_unlock( &mutex1 );
+	return NULL;
+}
+
 int main(int argc , char *argv[])	{
-	int i;
+	int i, kk=0;
 	
 	init_var();
 	
@@ -575,6 +672,8 @@ int main(int argc , char *argv[])	{
 	cek_konfig();	printd(5, " Cek konfig selesai %d/%d\r\n", iI, sumber.jmlSumber);
 	//buka_soket();
 	iI = 0;
+
+	counter = 0;
 
 	time_t rawtime;
 	struct tm * ti;
@@ -589,17 +688,34 @@ int main(int argc , char *argv[])	{
 	
 	printf("Parent PID(%d): Mulai sedot !!...\n", getpid());
 	
+	
 	#if 1
-
 	while(1)	{
 		ambil_data();
 		simpan_ke_file();
-		//sleep(sumber.tSedot);
 		sleep(sumber.tSedot);
+
+		if (kk > com_mod.tKirim)	{
+			if (i = !pthread_create(&kirim_thread, NULL, kirim_paket, NULL)) {
+				printf("======= Buat Thread\r\n");
+				
+				if(pthread_join(kirim_thread, NULL)) {
+					fprintf(stderr, "Error joining thread\n");
+				} else {
+					printf(" ====== berhasil JOIN Thread !!\r\n");
+				}
+			}
+			printf("conter: %d\r\n", counter);
+			kk=0;
+		}
+
+		kk++;
 	}
 	#endif
-	printf("keluar LOOP !!!\r\n");
-	siginthandler(1);
+	printf("KELUAR LOOP UTAMA conter: %d\r\n", counter);
+
+	sig_int(1);
+	//siginthandler(1);
 	printf("keluar MAIN !!!\r\n");
 	
 	return 0;

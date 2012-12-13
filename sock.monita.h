@@ -2,8 +2,9 @@
 #define PER_SUMBER		20
 #define FILENYA			"mon_konfig.cfg"
 #define PID_FILE		"monita_sock.pid"
+#define KIRIM_FILE		"monita_kirim.pid"
 
-
+#define MAX_ISI			1024
 
 struct t_xdata {
 	char mon[8];				// id bahwa data monita
@@ -42,14 +43,16 @@ struct t_sumber	{
 struct t_tujuan	{
 	int httppost;
 	int ftp;
-	int port;
+	int porthttppost;
 	char server[50];		// http://daunbiru.dynalias.com
+	char serverip[20];		// 
 	char file[50];			// /monita3/monita_loket_file.php
 };
 
 struct t_umum	{
 	char modul[50];
 	int debug;
+	int st_thread;
 };
 
 struct t_modem com_mod;
@@ -67,14 +70,20 @@ FILE * pFile;
 int aa, bb;
 int iI;
 
+pthread_t kirim_thread;
 time_t xtime;
 struct tm * wfile;
+
+int  counter;
 
 void siginthandler(int param);
 void sig_pipe(int signum);
 
 void cek_konfig();
 void ambil_data();
+void hitung_wkt(unsigned int w, int *wx);
+void *kirim_paket();
+
 int buka_sendiri();
 int waktu_atoi(char *waktu);
 
