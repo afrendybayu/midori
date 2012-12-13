@@ -11,10 +11,21 @@
 #include <sys/stat.h>
 #include <string.h>
 #include <arpa/inet.h>	//inet_addr
+#include <netdb.h>
 #include <signal.h>
 #include <unistd.h>
 #include <time.h>
+#include <regex.h>
 #include "sock.monita.h"
+
+#include <stdio.h> //printf
+#include <string.h> //memset
+#include <stdlib.h> //for exit(0);
+#include <sys/socket.h>
+#include <errno.h> //For errno - the error number
+#include <netdb.h>	//hostent
+#include <arpa/inet.h>
+
 
 #define PAKAI_DEBUG		
 #define JEDA	2
@@ -24,8 +35,8 @@ int printd(int prio, const char *format, ...)	{
 	va_list arg;
 
 	int done=0;
-	if (debug==0) return 0;
-	if (prio>=debug)	{
+	if (g.debug==0) return 0;
+	if (prio>=g.debug)	{
 		va_start (arg, format);
 		done = vfprintf (stdout, format, arg);
 		va_end (arg);
@@ -78,6 +89,37 @@ int waktu_atoi(char *waktu)	{
 	return angka;
 }
 
+int ip_valid(char *ip)	{
+	int i=0;
+	struct sockaddr_in sa;
+	i = inet_pton(AF_INET, ip, &(sa.sin_addr));
+	
+	if (i==1)	return i;
+
+	struct addrinfo hints, *servinfo, *p;
+	struct sockaddr_in *h;
+	int rv;
+
+	memset(&hints, 0, sizeof hints);
+	hints.ai_family = AF_UNSPEC; // use AF_INET6 to force IPv6
+	hints.ai_socktype = SOCK_STREAM;
+
+	if ( (rv = getaddrinfo( ip , "http" , &hints , &servinfo)) != 0)	{
+		fprintf(stderr, "getaddrinfo: %s\n", gai_strerror(rv));
+		return 1;
+	}
+
+	// loop through all the results and connect to the first we can
+	for(p = servinfo; p != NULL; p = p->ai_next)	{
+		h = (struct sockaddr_in *) p->ai_addr;
+		strcpy(ip, inet_ntoa( h->sin_addr ) );
+	}
+	
+	printd(5, "ip: %s\r\n", ip);
+	freeaddrinfo(servinfo); // all done with this structure
+	return 0;
+}
+
 int parsing_konfig(char *s)	{
 	int i=0;
 	char a[50], b[128];
@@ -110,7 +152,7 @@ int parsing_konfig(char *s)	{
 				return 0;
 			}
 		}
-		if (!strcmp(a,"sumber"))	{
+		if (!strcmp(a,"ipsumber"))	{
 			printd(5, "isinya: %s = %s\r\n", a, b);
 			i=iI+1;
 			if (i>sumber.jmlSumber)	{
@@ -118,6 +160,7 @@ int parsing_konfig(char *s)	{
 				//return 0;
 			} else {
 				ipsumber[iI].no = i;
+				ip_valid(b);
 				strcpy(ipsumber[iI].ip, b); printd(5, "%s\r\n", b); 
 				iI++;
 			}
@@ -144,24 +187,50 @@ int parsing_konfig(char *s)	{
 		if (!strcmp(a,"periodesedot"))	{	printd(5, "%s\r\n", b); sumber.tSedot = waktu_atoi(b); }
 		if (!strcmp(a,"periodefile"))	{	printd(5, "%s\r\n", b); sumber.tFile = waktu_atoi(b); }
 		if (!strcmp(a,"periodekirim"))	{	printd(5, "%s\r\n", b); com_mod.tKirim = waktu_atoi(b); }
-		if (!strcmp(a,"debug"))	{	printd(1000, "%s\r\n", b); debug = atoi(b); }
+		if (!strcmp(a,"debug"))	{	printd(1000, "%s\r\n", b); g.debug = atoi(b); }
+		if (!strcmp(a,"modul"))	{	printd(5, "%s\r\n", b); strcpy(g.modul, b); }
+		
+		if (!strcmp(a,"servertujuan"))	{	printd(5, "%s\r\n", b); 
+			ip_valid(b);
+			strcpy(penerima.server, b); 
+			//printf("IP server: %s\r\n", penerima.server);
+		}
+		if (!strcmp(a,"porttujuan"))	{	printd(5, "%s\r\n", b); penerima.port = atoi(b); }
+		if (!strcmp(a,"filetujuan"))	{	printd(5, "%s\r\n", b); strcpy(penerima.file, b); }
+		if (!strcmp(a,"httppost"))	{	printd(5, "%s\r\n", b); 
+			if ( (!strcmp(b,"yes")) || (!strcmp(b,"ya")) || (!strcmp(b,"1")) )
+					penerima.httppost = 1;
+			else 	penerima.httppost = 0;
+		}
+		if (!strcmp(a,"ftp"))	{	printd(5, "%s\r\n", b); 
+			if ( (!strcmp(b,"yes")) || (!strcmp(b,"ya")) || (!strcmp(b,"1")) )
+					penerima.ftp = 1;
+			else 	penerima.ftp = 0;
+		}
 	}
 	return 1;
 }
 
 void cek_konfig()	{
 	int i=0, j;
-	printf("serialport: %s\r\n", com_mod.comSer);
-	printf("baudrate  : %d\r\n", com_mod.baud);
-	printf("socket    : %d\r\n", sumber.socket);
-	printf("Folder    : %s\r\n", sumber.folder);
-	printf("File      : %s\r\n", sumber.file);
-	printf("t sedot   : %d\r\n", sumber.tSedot);
-	printf("t File    : %d\r\n", sumber.tFile);
-	printf("t kirim   : %d\r\n", com_mod.tKirim);
-	printf("DEBUG     : %d\r\n", debug);
+	printf("MODUL      : %s\r\n", g.modul);
+	printf("serialport : %s\r\n", com_mod.comSer);
+	printf("baudrate   : %d\r\n", com_mod.baud);
+	printf("socket     : %d\r\n", sumber.socket);
+	printf("Folder     : %s\r\n", sumber.folder);
+	printf("File       : %s\r\n", sumber.file);
+	printf("t sedot    : %d\r\n", sumber.tSedot);
+	printf("t File     : %d\r\n", sumber.tFile);
+	printf("t kirim    : %d\r\n", com_mod.tKirim);
+	printf("SERVER     : %s\r\n", penerima.server);
+	printf("  port     : %d\r\n", penerima.port);
+	printf("  file     : %s\r\n", penerima.file);
+	printf("  httppost : %s\r\n", (penerima.httppost==1)?"YA":"tidak");
+	printf("  ftp      : %s\r\n", (penerima.ftp==1)?"YA":"tidak");
 	
-	printf("Jml Smbr  : %d\r\n", sumber.jmlSumber);
+	printf("DEBUG      : %d\r\n", g.debug);
+	
+	printf("Jml Smbr   : %d\r\n", sumber.jmlSumber);
 	for(i=0; i<sumber.jmlSumber; i++)	{
 		printf("%3d. IP: %s\r\n", ipsumber[i].no, ipsumber[i].ip);
 	}
@@ -197,7 +266,7 @@ void init_var()		{
 	aa = 02;
 	bb = 1;
 	
-	debug = 100000;
+	g.debug = 100000;
 
 	sumber.tSedot  = 1;		// tiap 1 detik
 	sumber.tFile   = 60;	// tiap 1 menit
@@ -448,13 +517,13 @@ int simpan_ke_file()	{
 	}
 
 	baru = nama_file_simpan(perk);
-	printd(100, "file baru: %s\r\n", perk);
+	printd(5, "file baru: %s\r\n", perk);
 	sprintf(sl, "%s%s/%s", sumber.folder, sumber.folderdata, perk);
 	
 	i = stat (sl, &sts);
-	printf("i: %d, sl %s\r\n", i, sl);
+	printd(5, "i: %d, sl %s\r\n", i, sl);
 	if (i == -1)	{
-		printd (100, "File %s belum ada...\n", perk);
+		printd (5, "File %s belum ada...\n", perk);
 		baru = 1;
 	}
 	
@@ -464,7 +533,7 @@ int simpan_ke_file()	{
 	pFile = fopen (perk,"a+");
 	if (pFile!=NULL)	{
 		if (baru)	{
-			printd(100, "========== file baru +++++++++++++++\r\n");
+			printd(5, "========== file baru +++++++++++++++\r\n");
 			sprintf(perk, "waktu ");
 			strcpy(isifile, perk);
 			for (i=0; i<(PER_SUMBER*sumber.jmlSumber); i++)	{

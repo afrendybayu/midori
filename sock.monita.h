@@ -29,7 +29,7 @@ struct t_ipsumber		{
 	int stat_konek;
 };
 
-struct t_tuj	{
+struct t_sumber	{
 	int jmlSumber;
 	int socket;				// socket modul monita
 	int tSedot;
@@ -39,17 +39,34 @@ struct t_tuj	{
 	char file[20];
 };
 
+struct t_tujuan	{
+	int httppost;
+	int ftp;
+	int port;
+	char server[50];		// http://daunbiru.dynalias.com
+	char file[50];			// /monita3/monita_loket_file.php
+};
+
+struct t_umum	{
+	char modul[50];
+	int debug;
+};
+
 struct t_modem com_mod;
-struct t_tuj sumber;
+struct t_sumber sumber;
 //volatile static 
 struct t_ipsumber *ipsumber;
+struct t_tujuan penerima;
+struct t_umum g;
+
 float *data_f;
 int *idData;
 //float data_f[PER_SUMBER];
 FILE * pFile;
 
 int aa, bb;
-int iI, debug;
+int iI;
+
 time_t xtime;
 struct tm * wfile;
 
