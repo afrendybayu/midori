@@ -18,25 +18,23 @@
 #include <regex.h>
 #include "sock.monita.h"
 #include <pthread.h>
-
-#include <stdio.h> //printf
+#include <dirent.h>
 #include <string.h> //memset
-#include <stdlib.h> //for exit(0);
-#include <sys/socket.h>
 #include <errno.h> //For errno - the error number
 #include <netdb.h>	//hostent
-#include <arpa/inet.h>
 
 
 #define PAKAI_DEBUG		
 #define JEDA	2
 
-pthread_mutex_t mutex1 = PTHREAD_MUTEX_INITIALIZER;
+pthread_mutex_t mxq = PTHREAD_MUTEX_INITIALIZER;
 
 int printd(int prio, const char *format, ...)	{
 #ifdef PAKAI_DEBUG
 	va_list arg;
 
+	printf("\033[32m");
+	//printf("\033[7;#m");
 	int done=0;
 	if (g.debug==0) return 0;
 	if (prio>=g.debug)	{
@@ -44,7 +42,7 @@ int printd(int prio, const char *format, ...)	{
 		done = vfprintf (stdout, format, arg);
 		va_end (arg);
 	}
-	
+	printf("\033[0m");
 	return done;
 #endif
 }
@@ -55,10 +53,22 @@ void sig_int(int param)	{
 	
 	printf("\r\n ---- masuk Interupsi !!!!\r\n");
 	
+	pthread_mutex_unlock(&mxq); 
+	printf("================ mutex unlock thread !!\r\n");
+	
+	if (g.st_thread == 1)	{
+		if(pthread_join(kirim_thread, NULL)) {
+			fprintf(stderr, "Error joining thread\n");
+		} else {
+			printf(" ====== berhasil JOIN Thread !!\r\n");
+			g.st_thread = 0;
+		}
+	}
+	
 	free(data_f);
 	free(ipsumber);
 	printf(">>>>>>>>>>> Free Memory\r\n");	
-	
+
 	sprintf(kata, "%s%s", sumber.folder, PID_FILE);
 	//st = stat (kata, &sts);
 	//printf("st: %d\r\n", st);
@@ -219,7 +229,8 @@ int parsing_konfig(char *s)	{
 
 void cek_konfig()	{
 	int i=0, j;
-	
+	printf("\033[32m ++++++++    %s      ++++++++\r\n", APLIKASI);
+	printf(" ==============================================================\r\n");
 	printf("MODUL      : %s\r\n", g.modul);
 	printf("SERIALPORT : %s\r\n", com_mod.comSer);
 	printf("  baudrate : %d\r\n", com_mod.baud);
@@ -230,9 +241,9 @@ void cek_konfig()	{
 	printf("t File     : %d\r\n", sumber.tFile);
 	printf("t kirim    : %d\r\n", com_mod.tKirim);
 	printf("SERVER     : %s : %s\r\n", penerima.server, penerima.serverip);
-	printf("  port     : %d\r\n", penerima.port);
 	printf("  file     : %s\r\n", penerima.file);
 	printf("  httppost : %s\r\n", (penerima.httppost==1)?"YA":"Tidak");
+	printf("  port     : %d\r\n", penerima.porthttppost);
 	printf("  ftp      : %s\r\n", (penerima.ftp==1)?"YA":"Tidak");
 	printf("DEBUG      : %d\r\n", g.debug);
 	
@@ -246,6 +257,7 @@ void cek_konfig()	{
 			if (!((j+1)%5))	printf("\r\n");
 		}
 	}
+	printf("\033[0m");
 }
 
 void hitung_wkt(unsigned int w, int *wx)	{
@@ -584,83 +596,202 @@ int simpan_ke_file()	{
 	return 0;
 }
 
-int kirim_httpport(char *ip, char sfile)	{
+int kirim_httpport(char *ip, char *sfile)	{
 	int sockfd, n;
 	struct sockaddr_in servaddr;
+	struct stat sts;
 	char header[MAX_ISI], isifile[MAX_ISI];
+	
+	printf("ip: %s, file: %s\r\n", ip, sfile);
 	
 	if( (sockfd = socket(AF_INET,SOCK_STREAM,IPPROTO_TCP)) == -1 ){
         printf("socket: error");
         exit(0);
     }
+    
     bzero(&servaddr,sizeof(servaddr));
     servaddr.sin_family = AF_INET;
-    servaddr.sin_port = htons(penerima.port);  //connect to http server
+    servaddr.sin_port = htons(penerima.porthttppost);  //connect to http server
     
-    if(inet_pton(AF_INET, argv[1], &servaddr.sin_addr) < 0){
+    if(inet_pton(AF_INET, ip, &servaddr.sin_addr) < 0){
         printf("port: assigned invalid");
-        exit(0);
+        //exit(0);
+        return 1;
     }
-    if( connect(sockfd,(struct sockaddr *)&servaddr,sizeof(servaddr)) == -1){
+    if (connect(sockfd, (struct sockaddr *) &servaddr, sizeof(servaddr)) == -1)	{
         printf("connect: error");
-        exit(0);
+        //exit(0);
+        return 2;
     }
+    
+    sprintf(header, "%s%s", sumber.folder, sumber.folderdata);
+    if (chdir(header))	{
+		//printf("&*()*&*()_ GAGAL chdir \r\n");
+		printf("____ FOLDER TIDAK DITEMUKAN ____\r\n");
+		return 3;
+	}
+
+	sprintf(header, "%s%s/%s", sumber.folder, sumber.folderdata, sfile);
+	n = stat (header, &sts);
+	printd(1000, "n: %d, sl %s\r\n", n, header);
+	if (n == -1)	{
+		printd (5, "File %s Tidak ada...\n", sfile);
+		return 4;
+	}
+	//printf("header: %s\r\n", header);
+
+    pFile = fopen (sfile, "a");
+    if (pFile!=NULL)	{
+		printf("ada file !!\r\n");
+		if ( fgets (isifile, MAX_ISI, pFile) == NULL )	{
+			printf("FILE ERROR !!!!\r\n");
+		}
+		fclose (pFile);
+	}
+	
+	printf("---------------stlh close .....\r\n");
+	
+	
     bzero(&header,sizeof(header));
     
-    n = (strlen(to_send)+strlen(sfile)+287);
+    n = (int) (strlen(isifile) + strlen(sfile) + 287);
     
-    sprintf(header,"POST %s HTTP1.1\r\nAccept: */*\r\nUser-Agent: BalungKirik/1.0\r\n", argv[2]);
+    sprintf(header,"POST %s HTTP1.1\r\nAccept: */*\r\nUser-Agent: BalungKirik/1.0\r\n", penerima.file);
 	sprintf(header,"%sContent-Type: multipart/form-data; boundary=B4LunK1r1K\r\n", header);
 	//sprintf(header,"%sAccept-Encoding: gzip, deflate\r\n", header);
-	sprintf(header,"%sContent-Length: %d\r\n\r\n", header, gr);
-	sprintf(header,"%s\r\n\0", header);
+	sprintf(header,"%sContent-Length: %d\r\n\r\n", header, n);
+	sprintf(header,"%s\r\n%c", header, 0);
 	
 	sprintf(header,"%s--B4LunK1r1K\r\n", header);
 	sprintf(header,"%sContent-Disposition: form-data; name=\"nilai1\"\r\n", header);
-	sprintf(header,"%s\r\n\0", header);
+	sprintf(header,"%s\r\n%c", header, 0);
 	
 	sprintf(header,"%sInidanItuinaintqdq qjdpqkdq kdqd qodk qk\r\n", header);
 	sprintf(header,"%s--B4LunK1r1K\r\n", header);
-	sprintf(header,"%sContent-Disposition: form-data; name=\"file\"; filename=\"%s\"\r\n", header, name);
+	sprintf(header,"%sContent-Disposition: form-data; name=\"file\"; filename=\"%s\"\r\n", header, sfile);
 	sprintf(header,"%sContent-Type: text/plain\r\n", header);
-	sprintf(header,"%s\r\n\0", header);
+	sprintf(header,"%s\r\n%c", header, 0);
 	
-	sprintf(header,"%s%s\r\n", header, to_send);
-	sprintf(header,"%s--B4LunK1r1K\r\n\0", header);
+	sprintf(header,"%s%s\r\n", header, isifile);
+	sprintf(header,"%s--B4LunK1r1K\r\n%c", header, 0);
     
     printf("--------------------------------data kirim: \r\n");
-    //printf("%s\r\n---------------------------------\r\n\r\n", header);
+    printf("%s\r\n---------------------------------\r\n\r\n", header);
+    
+    close(sockfd);
+    return 0;
     
     if(write(sockfd,header,strlen(header)+1) == -1)
         printf("write");
     
-    while ((n = read(sockfd,recvline,sizeof(recvline))) > 0){
-        recvline[n] = 0;
+    bzero(&header,sizeof(header));	//strcpy(header, "");
+    while ((n = read(sockfd,header,sizeof(header))) > 0){
+        header[n] = 0;
         //printf("recv: %s\r\n", recvline);
-        if(fputs(recvline,stdout) == EOF)
+        if(fputs(header,stdout) == EOF)
             printf("read error");            
     }
     
     close(sockfd);
+    return 0;
+}
+
+int keluar_th(pthread_mutex_t *mtx)	{
+	switch(pthread_mutex_trylock(mtx)) {
+		case 0: /* if we got the lock, unlock and return 1 (true) */
+			pthread_mutex_unlock(mtx);
+			return 1;
+		case EBUSY: /* return 0 (false) if the mutex was locked */
+			return 0;
+	}
+	return 1;
+}
+
+void bagi_waktu(struct tm *tx, char *w, int pilih)	{
+	char tmp[6];
+	switch (pilih)	{
+		case TGL:
+			//printf("====tgl: %s\r\n", w);
+			strncpy(tmp, &w[6], 2); tmp[2] = 0;		tx->tm_mday = atoi(tmp);
+			strncpy(tmp, &w[4], 2); tmp[2] = 0;		tx->tm_mon = atoi(tmp) - 1;
+			strncpy(tmp, &w[0], 4); tmp[4] = 0;		tx->tm_year = atoi(tmp) - 1900;
+			//printf("******* tgl: %d-%d-%d\r\n", tx->tm_mday, tx->tm_mon, tx->tm_year);
+			break;
+		case JAM:
+			//printf("====wkt: %s\r\n", w);
+			strncpy(tmp, &w[0], 2); tmp[2] = 0;		tx->tm_hour = atoi(tmp);
+			strncpy(tmp, &w[2], 2); tmp[2] = 0;		tx->tm_min = atoi(tmp);
+			//printf("******* jam: %d:%d\r\n", tx->tm_hour, tx->tm_min);
+			break;
+		default:
+			break;
+	}
 }
 
 void *kirim_paket(void *argv)	{
-	pthread_mutex_lock( &mutex1 );
-	char ipnya[50];
+	pthread_mutex_t *mx = argv;
+	int l=0, i=0, hkirim=0, nbeda=0;
+	char ipnya[50], stmp[100], nf[30];
+	char tgl[10], ww[10];
+	char *pch;
+	double beda;
+	DIR *dir;
+	struct dirent *ent;
 	
-	
-	printd(1000, "---------- Konter : %d KIRIM PAKET\r\n", counter++);
-	strcpy(ipnya, penerima.server);
-	ip_valid(ipnya);
-	
-	
-	printf("----===> KELUAR LOOP THREAD !!!\r\n");
+	time_t xraw, filetime;
+	struct tm * tn, tf;
+	time ( &xraw );
+	//tn = localtime ( &xraw );
 
+	sprintf(stmp, "%s%s", sumber.folder, sumber.folderdata);
+	printd(1000, "---------- MASUK THREAD : %d KIRIM PAKET\r\n", counter++);
 
-	printf("----===> akhir THREAD !!!\r\n");
+	while( !keluar_th(mx) ) {
+		sleep(1);
+		l++;
+		if (l >= com_mod.tKirim)	{
+			dir = opendir(stmp);
+			if (dir != NULL) {
+				while ((ent = readdir (dir)) != NULL) {
+					strcpy(nf, ent->d_name);
+					//printf("===========================================%s\r\n", nf);
+					
+					if (strlen(nf)<5) continue;
+					i = 0;
+					
+					pch = strtok(nf, ".");
+					//printf ("ISINYA: %s -- %s -- %s\n", ent->d_name, nf, pch);
+					while (pch != NULL)	{
+						//printf("pch: %s\r\n", pch);
+						if (i==1)	{	strcpy(tgl, pch);	bagi_waktu(&tf, pch, TGL);	}
+						if (i==2)	{	strcpy(ww, pch);	bagi_waktu(&tf, pch, JAM);	}
+						pch = strtok(NULL, ".");
+						i++;
+					}
+					
+					filetime = mktime(&tf);
+					beda = difftime(xraw, filetime);
+					nbeda = (int) beda;
+					//printf("beda: %.2d  == %.2f \r\n", nbeda, beda);
 
-	pthread_mutex_unlock( &mutex1 );
-	return NULL;
+					if (beda > JEDA_NOW)	{
+						//printf("KIRIM PKET FILE INI !!!\r\n");
+						
+						hkirim = kirim_httpport(penerima.serverip, ent->d_name);
+						if (hkirim>0)	{
+							strcpy(ipnya, penerima.server);
+						//	ip_valid(ipnya);
+						}
+					}
+				}
+				closedir (dir);
+			}
+			l = 0;
+		}
+	}
+
+	printd(100, "----===> %s KELUAR LOOP THREAD !!!\r\n", __FUNCTION__);
+	return NULL;	
 }
 
 int main(int argc , char *argv[])	{
@@ -672,7 +803,6 @@ int main(int argc , char *argv[])	{
 	cek_konfig();	printd(5, " Cek konfig selesai %d/%d\r\n", iI, sumber.jmlSumber);
 	//buka_soket();
 	iI = 0;
-
 	counter = 0;
 
 	time_t rawtime;
@@ -686,29 +816,21 @@ int main(int argc , char *argv[])	{
 	buka_sendiri(0);
 	#endif
 	
+	pthread_mutex_init(&mxq,NULL);
+	pthread_mutex_lock(&mxq);
+	
 	printf("Parent PID(%d): Mulai sedot !!...\n", getpid());
 	
-	
+	if ( !pthread_create(&kirim_thread, NULL, kirim_paket, &mxq) ) {		// sukses = 0
+		printf("======= Buat Thread\r\n");
+		g.st_thread = 1;
+	}
+
 	#if 1
 	while(1)	{
 		ambil_data();
 		simpan_ke_file();
 		sleep(sumber.tSedot);
-
-		if (kk > com_mod.tKirim)	{
-			if (i = !pthread_create(&kirim_thread, NULL, kirim_paket, NULL)) {
-				printf("======= Buat Thread\r\n");
-				
-				if(pthread_join(kirim_thread, NULL)) {
-					fprintf(stderr, "Error joining thread\n");
-				} else {
-					printf(" ====== berhasil JOIN Thread !!\r\n");
-				}
-			}
-			printf("conter: %d\r\n", counter);
-			kk=0;
-		}
-
 		kk++;
 	}
 	#endif

@@ -1,10 +1,15 @@
 
+#define APLIKASI		"Midori -- Monita Sedot socket Client"
+#define VERSI			"0.1"
+
 #define PER_SUMBER		20
 #define FILENYA			"mon_konfig.cfg"
 #define PID_FILE		"monita_sock.pid"
 #define KIRIM_FILE		"monita_kirim.pid"
 
 #define MAX_ISI			1024
+
+#define JEDA_NOW		60*5			// 5 menit
 
 struct t_xdata {
 	char mon[8];				// id bahwa data monita
@@ -55,6 +60,8 @@ struct t_umum	{
 	int st_thread;
 };
 
+enum WAKTU {TGL, JAM};
+
 struct t_modem com_mod;
 struct t_sumber sumber;
 //volatile static 
@@ -81,8 +88,9 @@ void sig_pipe(int signum);
 
 void cek_konfig();
 void ambil_data();
-void hitung_wkt(unsigned int w, int *wx);
 void *kirim_paket();
+void hitung_wkt(unsigned int w, int *wx);
+void bagi_waktu(struct tm *tx, char *w, int pilih);
 
 int buka_sendiri();
 int waktu_atoi(char *waktu);
