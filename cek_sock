@@ -1,0 +1,13 @@
+#! /bin/bash
+
+# Afrendy Bayu
+# Depok,121212
+
+if [ -f "monita_sock.pid" ]
+then
+	PID=`more monita_sock.pid`
+	echo $PID
+	top -p $PID
+else
+	echo APLIKASI MATI !!!
+fi
