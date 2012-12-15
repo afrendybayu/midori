@@ -229,7 +229,7 @@ int parsing_konfig(char *s)	{
 
 void cek_konfig()	{
 	int i=0, j;
-	printf("\033[32m ++++++++    %s      ++++++++\r\n", APLIKASI);
+	printf("\033[32m +++++++    %s    ++++++\r\n", APLIKASI);
 	printf(" ==============================================================\r\n");
 	printf("MODUL      : %s\r\n", g.modul);
 	printf("SERIALPORT : %s\r\n", com_mod.comSer);
@@ -597,15 +597,15 @@ int simpan_ke_file()	{
 }
 
 int kirim_httpport(char *ip, char *sfile)	{
-	int sockfd, n, lSize=0, awal=0, akhir=0;
+	int sockfd, n, lSize=0, awal=0;
 	struct sockaddr_in servaddr;
 	struct stat sts;
 	
-	char * buffer, header[MAX_ISI], *paket;
+	char *buffer, header[MAX_ISI];
 	
-	printf("ip: %s, file: %s\r\n", ip, sfile);
+	//printf("ip: %s, file: %s\r\n", ip, sfile);
 	
-	if( (sockfd = socket(AF_INET,SOCK_STREAM,IPPROTO_TCP)) == -1 ){
+	if( (sockfd = socket(AF_INET,SOCK_STREAM,IPPROTO_TCP)) == -1 )		{
         printf("socket: error");
         exit(0);
     }
@@ -634,7 +634,7 @@ int kirim_httpport(char *ip, char *sfile)	{
 
 	sprintf(header, "%s%s/%s", sumber.folder, sumber.folderdata, sfile);
 	n = stat (header, &sts);
-	printd(1000, "n: %d, sl %s\r\n", n, header);
+	printd(5, "n: %d, sl %s\r\n", n, header);
 	if (n == -1)	{
 		printd (5, "File %s Tidak ada...\n", sfile);
 		return 4;
@@ -645,71 +645,63 @@ int kirim_httpport(char *ip, char *sfile)	{
     //strcpy(isifile, "");
     if (pFile!=NULL)	{
 		//printf("ada file !!\r\n");
-		
 		fseek(pFile, 0, SEEK_END);
 		lSize = ftell (pFile);
 		rewind(pFile);
-		//printf("ukuran: %d\r\n", lSize);
+
+		bzero(&header,sizeof(header));
+		n = lSize + strlen(sfile) + 287;
+
+		sprintf(header,"POST %s HTTP1.1\r\nAccept: */*\r\nUser-Agent: BalungKirik/1.0\r\n", penerima.file);
+		sprintf(header,"%sContent-Type: multipart/form-data; boundary=B4LunK1r1K\r\n", header);
+		//sprintf(header,"%sAccept-Encoding: gzip, deflate\r\n", header);
+		sprintf(header,"%sContent-Length: %d\r\n\r\n", header, n);
+		sprintf(header,"%s\r\n%c", header, 0);
 		
-		buffer = (char*) malloc (sizeof(char)*lSize);
-		n = fread (buffer, 1, lSize, pFile);
+		sprintf(header,"%s--B4LunK1r1K\r\n", header);
+		sprintf(header,"%sContent-Disposition: form-data; name=\"nilai1\"\r\n", header);
+		sprintf(header,"%s\r\n%c", header, 0);
+		
+		sprintf(header,"%sInidanItu\r\n", header);
+		sprintf(header,"%s--B4LunK1r1K\r\n", header);
+		sprintf(header,"%sContent-Disposition: form-data; name=\"file\"; filename=\"%s\"\r\n", header, sfile);
+		sprintf(header,"%sContent-Type: text/plain\r\n", header);
+		sprintf(header,"%s\r\n%c", header, 0);
+		
+		awal = strlen(header);
+		buffer = header;
+
+		buffer = (char*) malloc (sizeof(char)*lSize+awal+16);
+		for (n=0; n<awal; n++)	{
+			buffer[n] = header[n];
+		}
+		
+		n = fread (&buffer[awal], 1, lSize, pFile);
 		if (n != lSize) {
 			fputs ("Reading error",stderr);
+			free (buffer);
 			fclose (pFile);
 			return 5;
 		}
+
+		bzero(&header,sizeof(header));
+		sprintf(header,"--B4LunK1r1K\r\n%c", 0);
+		for (n=0; n<strlen(header); n++)	{
+			buffer[awal+lSize+n] = header[n];
+		}
 		fclose (pFile);
 	}
-	
-	//printf("%s---------------stlh close .....\r\n", buffer);
-
-    bzero(&header,sizeof(header));
-    n += strlen(sfile) + 287;
-    sprintf(header,"POST %s HTTP1.1\r\nAccept: */*\r\nUser-Agent: BalungKirik/1.0\r\n", penerima.file);
-	sprintf(header,"%sContent-Type: multipart/form-data; boundary=B4LunK1r1K\r\n", header);
-	//sprintf(header,"%sAccept-Encoding: gzip, deflate\r\n", header);
-	sprintf(header,"%sContent-Length: %d\r\n\r\n", header, n);
-	sprintf(header,"%s\r\n%c", header, 0);
-	
-	sprintf(header,"%s--B4LunK1r1K\r\n", header);
-	sprintf(header,"%sContent-Disposition: form-data; name=\"nilai1\"\r\n", header);
-	sprintf(header,"%s\r\n%c", header, 0);
-	
-	sprintf(header,"%sInidanItu\r\n", header);
-	sprintf(header,"%s--B4LunK1r1K\r\n", header);
-	sprintf(header,"%sContent-Disposition: form-data; name=\"file\"; filename=\"%s\"\r\n", header, sfile);
-	sprintf(header,"%sContent-Type: text/plain\r\n", header);
-	sprintf(header,"%s\r\n%c", header, 0);
-	
-	printf("ISIFILE: \r\n%s\r\n", header);
-	//printf("%s\r\n", buffer);
-	
-	awal = strlen(header);
-	//memcpy(paket, header, awal+1);
-	memmove(paket+awal, buffer, lSize+1);
-	//memcpy(buffer+awal, buffer, lSize);
-	//memmove(paket, header, awal);
-	
-	bzero(&header,sizeof(header));
-	sprintf(header,"%s--B4LunK1r1K\r\n%c", header, 0);
-	akhir = strlen(header);
-	memmove(buffer+awal+lSize, header, akhir+1);
-	//memcpy(buffer+awal+lSize, header, akhir+1);
-	buffer[awal+lSize+akhir] = 0;
 
     if (write(sockfd, buffer, strlen(buffer)+1) == -1)
         printf("write");
-    
-    printf("--------------------------------data kirim\r\n%s\r\n", buffer);
 
-    bzero(&header, sizeof(header));	//strcpy(header, "");
-    while ((n = read(sockfd, header, sizeof(header))) > 0){
+    while ((n = read(sockfd, header, sizeof(header))) > 0)		{
 		header[n] = 0;
 		//printf("recv: %s\r\n", header);
 		if(fputs(header,stdout) == EOF)
 			printf("read error");            
     }
-    
+
     close(sockfd);
     free (buffer);
     return 0;
@@ -793,13 +785,17 @@ void *kirim_paket(void *argv)	{
 					nbeda = (int) beda;
 					//printf("beda: %.2d  == %.2f \r\n", nbeda, beda);
 
-					if (beda > JEDA_NOW)	{
+					if (nbeda > JEDA_NOW)	{
 						//printf("KIRIM PKET FILE INI !!!\r\n");
 						
 						hkirim = kirim_httpport(penerima.serverip, ent->d_name);
 						if (hkirim>0)	{
 							strcpy(ipnya, penerima.server);
-						//	ip_valid(ipnya);
+							ip_valid(ipnya);
+						} else {
+							// terkirim, hapus file
+							hkirim = remove(ent->d_name);
+							printd(1000, "+++++++++++++ %s  TERHAPUS++++++\r\n", ent->d_name);
 						}
 					}
 				}

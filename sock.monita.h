@@ -1,5 +1,5 @@
 
-#define APLIKASI		"Midori -- Monita Sedot socket Client"
+#define APLIKASI		"Midori -- Monita Socket Sedot dari sumber"
 #define VERSI			"0.1"
 
 #define PER_SUMBER		20
@@ -7,7 +7,7 @@
 #define PID_FILE		"monita_sock.pid"
 #define KIRIM_FILE		"monita_kirim.pid"
 
-#define MAX_ISI			1024
+#define MAX_ISI			400
 
 #define JEDA_NOW		60*5			// 5 menit
 
