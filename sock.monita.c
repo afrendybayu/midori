@@ -597,10 +597,11 @@ int simpan_ke_file()	{
 }
 
 int kirim_httpport(char *ip, char *sfile)	{
-	int sockfd, n;
+	int sockfd, n, lSize=0, awal=0, akhir=0;
 	struct sockaddr_in servaddr;
 	struct stat sts;
-	char header[MAX_ISI], isifile[MAX_ISI];
+	
+	char * buffer, header[MAX_ISI], *paket;
 	
 	printf("ip: %s, file: %s\r\n", ip, sfile);
 	
@@ -640,22 +641,30 @@ int kirim_httpport(char *ip, char *sfile)	{
 	}
 	//printf("header: %s\r\n", header);
 
-    pFile = fopen (sfile, "a");
+    pFile = fopen (sfile, "rb");
+    //strcpy(isifile, "");
     if (pFile!=NULL)	{
-		printf("ada file !!\r\n");
-		if ( fgets (isifile, MAX_ISI, pFile) == NULL )	{
-			printf("FILE ERROR !!!!\r\n");
+		//printf("ada file !!\r\n");
+		
+		fseek(pFile, 0, SEEK_END);
+		lSize = ftell (pFile);
+		rewind(pFile);
+		//printf("ukuran: %d\r\n", lSize);
+		
+		buffer = (char*) malloc (sizeof(char)*lSize);
+		n = fread (buffer, 1, lSize, pFile);
+		if (n != lSize) {
+			fputs ("Reading error",stderr);
+			fclose (pFile);
+			return 5;
 		}
 		fclose (pFile);
 	}
 	
-	printf("---------------stlh close .....\r\n");
-	
-	
+	//printf("%s---------------stlh close .....\r\n", buffer);
+
     bzero(&header,sizeof(header));
-    
-    n = (int) (strlen(isifile) + strlen(sfile) + 287);
-    
+    n += strlen(sfile) + 287;
     sprintf(header,"POST %s HTTP1.1\r\nAccept: */*\r\nUser-Agent: BalungKirik/1.0\r\n", penerima.file);
 	sprintf(header,"%sContent-Type: multipart/form-data; boundary=B4LunK1r1K\r\n", header);
 	//sprintf(header,"%sAccept-Encoding: gzip, deflate\r\n", header);
@@ -666,33 +675,43 @@ int kirim_httpport(char *ip, char *sfile)	{
 	sprintf(header,"%sContent-Disposition: form-data; name=\"nilai1\"\r\n", header);
 	sprintf(header,"%s\r\n%c", header, 0);
 	
-	sprintf(header,"%sInidanItuinaintqdq qjdpqkdq kdqd qodk qk\r\n", header);
+	sprintf(header,"%sInidanItu\r\n", header);
 	sprintf(header,"%s--B4LunK1r1K\r\n", header);
 	sprintf(header,"%sContent-Disposition: form-data; name=\"file\"; filename=\"%s\"\r\n", header, sfile);
 	sprintf(header,"%sContent-Type: text/plain\r\n", header);
 	sprintf(header,"%s\r\n%c", header, 0);
 	
-	sprintf(header,"%s%s\r\n", header, isifile);
+	printf("ISIFILE: \r\n%s\r\n", header);
+	//printf("%s\r\n", buffer);
+	
+	awal = strlen(header);
+	//memcpy(paket, header, awal+1);
+	memmove(paket+awal, buffer, lSize+1);
+	//memcpy(buffer+awal, buffer, lSize);
+	//memmove(paket, header, awal);
+	
+	bzero(&header,sizeof(header));
 	sprintf(header,"%s--B4LunK1r1K\r\n%c", header, 0);
-    
-    printf("--------------------------------data kirim: \r\n");
-    printf("%s\r\n---------------------------------\r\n\r\n", header);
-    
-    close(sockfd);
-    return 0;
-    
-    if(write(sockfd,header,strlen(header)+1) == -1)
+	akhir = strlen(header);
+	memmove(buffer+awal+lSize, header, akhir+1);
+	//memcpy(buffer+awal+lSize, header, akhir+1);
+	buffer[awal+lSize+akhir] = 0;
+
+    if (write(sockfd, buffer, strlen(buffer)+1) == -1)
         printf("write");
     
-    bzero(&header,sizeof(header));	//strcpy(header, "");
-    while ((n = read(sockfd,header,sizeof(header))) > 0){
-        header[n] = 0;
-        //printf("recv: %s\r\n", recvline);
-        if(fputs(header,stdout) == EOF)
-            printf("read error");            
+    printf("--------------------------------data kirim\r\n%s\r\n", buffer);
+
+    bzero(&header, sizeof(header));	//strcpy(header, "");
+    while ((n = read(sockfd, header, sizeof(header))) > 0){
+		header[n] = 0;
+		//printf("recv: %s\r\n", header);
+		if(fputs(header,stdout) == EOF)
+			printf("read error");            
     }
     
     close(sockfd);
+    free (buffer);
     return 0;
 }
 
